@@ -1,0 +1,59 @@
+services:
+  verifact-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: verifact
+      POSTGRES_USER: verifact
+      POSTGRES_PASSWORD: verifact-local-only
+    volumes: [verifact-postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verifact -d verifact"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  verifact-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  verifact-mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ["8025:8025"]
+  verifact-api:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /app
+    volumes: ["./backend:/app"]
+    environment:
+      VERIFACT_MODE: local-fixture
+      VERIFACT_DATABASE_URL: postgresql+psycopg://verifact:verifact-local-only@verifact-db:5432/verifact
+      VERIFACT_FRONTEND_ORIGIN: http://localhost:5173
+      VERIFACT_PUBLIC_BASE_URL: http://localhost:5173
+      VERIFACT_SECURE_COOKIES: "false"
+    ports: ["8000:8000"]
+    depends_on:
+      verifact-db: {condition: service_healthy}
+      verifact-redis: {condition: service_healthy}
+  verifact-worker:
+    build: ./backend
+    command: python -m app.worker
+    working_dir: /app
+    volumes: ["./backend:/app"]
+    environment:
+      VERIFACT_MODE: local-fixture
+      VERIFACT_DATABASE_URL: postgresql+psycopg://verifact:verifact-local-only@verifact-db:5432/verifact
+    depends_on:
+      verifact-db: {condition: service_healthy}
+  verifact-frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_PROXY_TARGET: http://verifact-api:8000
+    volumes: ["./frontend:/app"]
+    ports: ["5173:5173"]
+    depends_on: [verifact-api]
+volumes:
+  verifact-postgres:

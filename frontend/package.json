@@ -1,0 +1,26 @@
+{
+  "name": "verifact-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "latest",
+    "@types/node": "^26.3.0",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "tailwindcss": "latest"
+  }
+}

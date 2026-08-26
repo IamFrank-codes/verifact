@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "default": {
+    "rule": "default_unknown",
+    "source_type": "Unknown",
+    "quality_class": "Unknown",
+    "weight": 0.35,
+    "rationale": "No matching VeriFact source-policy rule. Unknown does not imply low quality or unreliability."
+  },
+  "rules": [
+    {"domain": "who.int", "rule": "who_international_organization", "source_type": "International organization", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured World Health Organization domain rule."},
+    {"domain": "cdc.gov", "rule": "cdc_government_health", "source_type": "Government agency", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured United States public health agency domain rule."},
+    {"domain": "nih.gov", "rule": "nih_government_research", "source_type": "Government research institution", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured National Institutes of Health domain rule."},
+    {"domain": "reuters.com", "rule": "reuters_established_news", "source_type": "Established news organization", "quality_class": "Medium", "weight": 0.78, "rationale": "Matches the configured Reuters publisher domain rule; this is a policy classification, not a guarantee."},
+    {"domain": "factcheck.org", "rule": "factcheck_org", "source_type": "Fact-check organization", "quality_class": "High", "weight": 0.88, "rationale": "Matches the configured FactCheck.org domain rule."}
+  ]
+}

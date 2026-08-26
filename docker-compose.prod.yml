@@ -1,0 +1,25 @@
+services:
+  verifact-api:
+    build: ./backend
+    environment:
+      VERIFACT_MODE: ${VERIFACT_MODE:-production}
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL}
+      VERIFACT_SECRET_KEY: ${VERIFACT_SECRET_KEY}
+      VERIFACT_FRONTEND_ORIGIN: ${VERIFACT_FRONTEND_ORIGIN}
+      VERIFACT_PUBLIC_BASE_URL: ${VERIFACT_PUBLIC_BASE_URL}
+      VERIFACT_SECURE_COOKIES: "true"
+      VERIFACT_GOOGLE_FACTCHECK_KEY: ${VERIFACT_GOOGLE_FACTCHECK_KEY:-}
+      VERIFACT_NEWSAPI_KEY: ${VERIFACT_NEWSAPI_KEY:-}
+      VERIFACT_OPENAI_API_KEY: ${VERIFACT_OPENAI_API_KEY:-}
+    restart: unless-stopped
+  verifact-worker:
+    build: ./backend
+    command: python -m app.worker
+    environment:
+      VERIFACT_MODE: ${VERIFACT_MODE:-production}
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL}
+      VERIFACT_SECRET_KEY: ${VERIFACT_SECRET_KEY}
+    restart: unless-stopped
+  verifact-frontend:
+    build: ./frontend
+    restart: unless-stopped
