@@ -23,7 +23,7 @@ services:
     ports: ["8025:8025"]
   verifact-api:
     build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     working_dir: /app
     volumes: ["./backend:/app"]
     environment:
