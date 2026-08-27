@@ -1,0 +1,90 @@
+flowchart TB
+    Browser[User browser]
+
+    subgraph Client[VeriFact client]
+        SPA[React single-page application\nfrontend/src/main.tsx]
+        DevServer[Vite development server\nlocal Docker]
+        Nginx[Nginx static frontend\nproduction image]
+    end
+
+    subgraph API[FastAPI API service]
+        Main[app.main\nAuth, verification, history, sharing routes]
+        Config[Settings\napp.core.config]
+        Security[app.security\nArgon2 and signed session token]
+        Verify[run_verification\napp.services.verification]
+        Extract[extract_article\napp.services.extraction]
+        Policy[SourcePolicy\napp.evidence.source_policy]
+        Providers[enabled_external_providers\napp.evidence.providers]
+        AI[analyze_evidence\napp.ai.structured]
+        Queue[enqueue_verification\napp.services.jobs]
+        Email[send_password_reset_email\napp.services.email]
+    end
+
+    subgraph Worker[Separate verification worker]
+        WorkerMain[app.worker]
+        Job[run_verification_job]
+    end
+
+    subgraph Data[Persistent application data]
+        DB[(PostgreSQL or SQLite local)]
+        Redis[(Redis / RQ queue)]
+        Fixtures[Deterministic fixtures\napp.fixtures.deterministic]
+        PolicyFile[source_policy.json]
+    end
+
+    subgraph External[Optional live services]
+        OpenAI[OpenAI-compatible API]
+        Google[Google Fact Check Tools]
+        NewsAPI[NewsAPI]
+        GDELT[GDELT]
+        SMTP[SMTP email provider]
+        Articles[Public article URLs]
+    end
+
+    subgraph Production[Production edge]
+        Caddy[Caddy HTTPS reverse proxy]
+    end
+
+    Browser --> SPA
+    SPA --> DevServer
+    DevServer -->|/api proxy in local Docker| Main
+    Browser -->|HTTPS in production| Caddy
+    Caddy --> Nginx
+    Caddy --> Main
+    Nginx -->|/api proxy| Main
+
+    Main --> Config
+    Main --> Security
+    Main --> Queue
+    Main --> Email
+    Main --> DB
+    Queue --> Redis
+    Redis --> WorkerMain
+    WorkerMain --> Job
+    Job --> Verify
+    Verify --> DB
+    Verify --> Extract
+    Verify --> Policy
+    Policy --> PolicyFile
+    Verify --> Providers
+    Verify --> AI
+    Extract --> Articles
+    Providers --> Google
+    Providers --> NewsAPI
+    Providers --> GDELT
+    AI --> OpenAI
+    Email --> SMTP
+
+    Fixtures -. Local Mock Mode only .-> Verify
+    Config -. local-fixture .-> Fixtures
+    Config -. hybrid + local_real_api_mode=true .-> Providers
+    Config -. production .-> Providers
+
+    classDef app fill:#eaf2ff,stroke:#205493,color:#172b4d
+    classDef store fill:#edf8ef,stroke:#287d3c,color:#153d1d
+    classDef external fill:#fff4e5,stroke:#b26a00,color:#5c3600
+    classDef edge fill:#f5efff,stroke:#6b4ca3,color:#2e1f51
+    class Main,Config,Security,Verify,Extract,Policy,Providers,AI,Queue,Email,WorkerMain,Job,SPA,DevServer,Nginx app
+    class DB,Redis,Fixtures,PolicyFile store
+    class OpenAI,Google,NewsAPI,GDELT,SMTP,Articles external
+    class Caddy edge

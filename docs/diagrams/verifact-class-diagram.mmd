@@ -1,0 +1,178 @@
+classDiagram
+    direction LR
+
+    class User {
+        +str id
+        +str full_name
+        +str email
+        +str password_hash
+        +bool email_verified
+        +datetime created_at
+    }
+    class PasswordResetToken {
+        +str id
+        +str user_id
+        +str token_hash
+        +datetime expires_at
+        +datetime used_at
+        +datetime created_at
+    }
+    class Article {
+        +str id
+        +str url
+        +str title
+        +str author
+        +str publisher
+        +str published_at
+        +str extracted_text
+        +str extraction_status
+        +dict metadata_json
+    }
+    class Verification {
+        +str id
+        +str user_id
+        +str article_id
+        +str input_type
+        +str original_input
+        +str status
+        +str stage
+        +str evidence_status
+        +str summary
+        +float score
+        +str score_band
+        +float coverage_pct
+        +str policy_version
+        +bool is_public
+        +str public_id
+        +str mode
+        +str error_message
+        +datetime created_at
+        +datetime completed_at
+    }
+    class Claim {
+        +str id
+        +str verification_id
+        +int sequence
+        +str text
+        +str claim_type
+        +float importance
+        +bool checkable
+        +str extraction_rationale
+        +str verdict
+        +str explanation
+        +str evidence_coverage
+        +str freshness_note
+    }
+    class Evidence {
+        +str id
+        +str claim_id
+        +str source_id
+        +str relationship_type
+        +str excerpt
+        +str relevance
+        +str published_at
+        +datetime retrieved_at
+        +str provider
+        +bool fixture
+    }
+    class Source {
+        +str id
+        +str canonical_url
+        +str name
+        +str domain
+        +str source_type
+        +str quality_class
+        +str policy_version
+        +str policy_rule
+        +str policy_rationale
+    }
+    class VerificationScore {
+        +str id
+        +str verification_id
+        +bool eligible
+        +str eligibility_reason
+        +str formula_version
+        +dict components
+    }
+    class ProviderRun {
+        +str id
+        +str verification_id
+        +str provider
+        +str status
+        +str message
+        +datetime created_at
+    }
+
+    class Settings {
+        +str app_name
+        +str environment
+        +str mode
+        +str database_url
+        +str redis_url
+        +str frontend_origin
+        +str public_base_url
+        +bool secure_cookies
+        +bool local_real_api_mode
+        +bool live_provider_mode
+        +list cors_origins
+        +list host_list
+    }
+    class SourcePolicy {
+        +dict data
+        +str version
+        +classify(url) dict
+    }
+    class EvidenceItem {
+        +str name
+        +str url
+        +str published_at
+        +str excerpt
+        +str relationship_type
+        +str relevance
+        +str provider
+    }
+    class EvidenceProvider {
+        <<Protocol>>
+        +str name
+        +search(claim) list~EvidenceItem~
+    }
+    class GoogleFactCheckProvider {
+        +str name
+        +search(claim) list~EvidenceItem~
+    }
+    class GDELTProvider {
+        +str name
+        +search(claim) list~EvidenceItem~
+    }
+    class NewsAPIProvider {
+        +str name
+        +search(claim) list~EvidenceItem~
+    }
+    class EvidenceAssessment {
+        +Verdict verdict
+        +str explanation
+        +list~str~ supporting_ids
+        +list~str~ contradicting_ids
+        +list~str~ contextual_ids
+        +str freshness_note
+    }
+
+    User "1" --> "0..*" Verification : verifications
+    User "1" --> "0..*" PasswordResetToken : user_id
+    Verification "0..*" --> "0..1" Article : article
+    Verification "1" --> "0..*" Claim : claims
+    Verification "1" --> "0..1" VerificationScore : score_record
+    Verification "1" --> "0..*" ProviderRun : provider_runs
+    Claim "1" --> "0..*" Evidence : evidence
+    Evidence "0..*" --> "1" Source : source
+
+    GoogleFactCheckProvider ..|> EvidenceProvider
+    GDELTProvider ..|> EvidenceProvider
+    NewsAPIProvider ..|> EvidenceProvider
+    EvidenceProvider ..> EvidenceItem : returns
+    SourcePolicy ..> Source : classifies
+    Settings ..> SourcePolicy : source_policy_path
+    Settings ..> GoogleFactCheckProvider : google_factcheck_key
+    Settings ..> NewsAPIProvider : newsapi_key
+    Settings ..> GDELTProvider : gdelt_enabled
+    EvidenceAssessment ..> Evidence : validates IDs against
