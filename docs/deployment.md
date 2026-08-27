@@ -61,11 +61,10 @@ For password reset, configure an SMTP provider using the `VERIFACT_SMTP_*` varia
 
 ## 4. Build, migrate, and start safely
 
-Create a backup before an upgrade. For the first deployment, build images, run the migration profile, then start the service stack:
+For a first deployment, build images, run the migration profile, then start the service stack. Backups are required before later upgrades, after the database already exists:
 
 ```bash
 chmod +x ops/*.sh scripts/production_smoke.sh
-./ops/backup-postgres.sh
 docker compose -f docker-compose.prod.yml --env-file .env.production build
 docker compose -f docker-compose.prod.yml --env-file .env.production --profile ops run --rm verifact-migrate
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
