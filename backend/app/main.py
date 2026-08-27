@@ -231,8 +231,8 @@ def create_verification(payload: VerificationInput, user: User = Depends(current
             v.error_message = 'VeriFact could not queue this verification. Please retry.'
             db.commit()
             raise HTTPException(status_code=503, detail='VeriFact verification processing is temporarily unavailable.')
-        return {'id': v.id, 'job_id': job_id, 'status': v.status, 'stage': v.stage, 'message': 'VeriFact accepted the submission and queued evidence processing.'}
-    return {'id': v.id, 'status': v.status, 'stage': v.stage, 'message': 'VeriFact accepted the local demonstration submission.'}
+        return {'id': v.id, 'job_id': job_id, 'mode': settings.mode, 'status': v.status, 'stage': v.stage, 'message': 'VeriFact accepted the submission and queued evidence processing.'}
+    return {'id': v.id, 'mode': settings.mode, 'status': v.status, 'stage': v.stage, 'message': 'VeriFact accepted the local demonstration submission.'}
 
 
 @app.post('/api/v1/verifications/{verification_id}/run-fixture')

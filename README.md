@@ -88,3 +88,7 @@ VeriFact now includes a provider-neutral production Compose stack with HTTPS rev
 > **Production mode never uses fixture evidence.** It requires HTTPS origins, PostgreSQL, Redis, secure cookies, and a non-default secret. If live providers are unavailable, the report must show an evidence limitation rather than demo data or an arbitrary score.
 
 Read [docs/deployment.md](docs/deployment.md) before configuring a public host. Copy `.env.production.example` to `.env.production` only on the production host, configure a domain/DNS and credentials there, then follow the backup → build → migration → deploy → readiness → smoke-test sequence. The public deployment itself is intentionally deferred until a hosting account, domain, SMTP provider, and any desired evidence-provider credentials are available.
+
+## Hybrid local provider testing
+
+To test the same provider interfaces used by production from your own computer, read [docs/hybrid-local-testing.md](docs/hybrid-local-testing.md). The optional hybrid override keeps **Local Mock Mode** as the default and reads real OpenAI, Google Fact Check, NewsAPI, GDELT, and SMTP credentials only from the Git-ignored `.env.hybrid` file. In Local Real-API Mode, missing providers remain explicit evidence limitations; VeriFact never fills the gap with fixture evidence.

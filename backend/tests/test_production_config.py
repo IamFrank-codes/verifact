@@ -37,3 +37,10 @@ def test_valid_production_configuration_is_accepted():
 def test_development_settings_allow_docker_api_hostname():
     settings = Settings(environment='development', mode='local-fixture')
     assert 'verifact-api' in settings.host_list
+
+
+def test_hybrid_mode_defaults_to_mock_and_requires_explicit_real_api_switch():
+    mock_settings = Settings(environment='development', mode='hybrid')
+    real_settings = Settings(environment='development', mode='hybrid', local_real_api_mode=True)
+    assert mock_settings.live_provider_mode is False
+    assert real_settings.live_provider_mode is True

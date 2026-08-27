@@ -1,0 +1,18 @@
+services:
+  verifact-api:
+    env_file:
+      - .env.hybrid
+    environment:
+      VERIFACT_ENVIRONMENT: development
+      VERIFACT_MODE: hybrid
+      VERIFACT_REDIS_URL: redis://verifact-redis:6379/0
+      VERIFACT_ALLOWED_HOSTS: localhost,127.0.0.1,verifact-api
+
+  verifact-worker:
+    env_file:
+      - .env.hybrid
+    environment:
+      VERIFACT_ENVIRONMENT: development
+      VERIFACT_MODE: hybrid
+      VERIFACT_DATABASE_URL: postgresql+psycopg://verifact:verifact-local-only@verifact-db:5432/verifact
+      VERIFACT_REDIS_URL: redis://verifact-redis:6379/0

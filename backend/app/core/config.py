@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     google_factcheck_key: str | None = None
     newsapi_key: str | None = None
     gdelt_enabled: bool = False
+    local_real_api_mode: bool = False
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_model: str = 'gpt-4o-mini'
@@ -63,6 +64,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == 'production' or self.mode == 'production'
+
+    @property
+    def live_provider_mode(self) -> bool:
+        return self.mode == 'production' or (self.mode == 'hybrid' and self.local_real_api_mode)
 
     @model_validator(mode='after')
     def validate_production(self):

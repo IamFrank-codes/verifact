@@ -72,21 +72,26 @@ def run_verification(db: Session, verification_id: str):
             article = Article(url=article_data['url'], title=article_data.get('title'), author=article_data.get('author'), publisher=article_data.get('publisher'), published_at=article_data.get('published_at'), extracted_text=article_data['text'], extraction_status='complete')
             db.add(article); db.flush(); verification.article_id = article.id; verification.article = article; content = article_data['text']; db.commit()
         set_stage(db, verification, 'Identifying factual claims')
-        fixture = find_fixture(content) if settings.mode in {'local-fixture', 'hybrid'} else None
+        use_fixture = settings.mode == 'local-fixture' or (settings.mode == 'hybrid' and not settings.local_real_api_mode)
+        fixture = find_fixture(content) if use_fixture else None
         result = fixture or generic_claim(content)
-        claim = Claim(verification_id=verification.id, sequence=1, text=result['claim'], verdict=result['verdict'], explanation=result['explanation'], evidence_coverage='2 retained evidence records' if result['evidence'] else 'No retained evidence records', freshness_note='Evidence dates are displayed on each record. Local fixtures are demonstration data.')
+        freshness_note = 'Evidence dates are displayed on each record. Local fixtures are demonstration data.' if use_fixture else 'Evidence dates are displayed on each retained live-provider record.'
+        claim = Claim(verification_id=verification.id, sequence=1, text=result['claim'], verdict=result['verdict'], explanation=result['explanation'], evidence_coverage='2 retained evidence records' if result['evidence'] else 'No retained evidence records', freshness_note=freshness_note)
         db.add(claim); db.flush(); db.commit()
         set_stage(db, verification, 'Retrieving and comparing evidence')
         items = list(result['evidence'])
-        for provider in enabled_external_providers() if settings.mode != 'local-fixture' else []:
+        providers = enabled_external_providers() if settings.live_provider_mode else []
+        if settings.live_provider_mode and not providers:
+            db.add(ProviderRun(verification_id=verification.id, provider='Live evidence providers', status='unavailable', message='No live evidence-provider credentials are configured. VeriFact did not use fixture evidence.'))
+        for provider in providers:
             try:
                 found = provider.search(claim.text); items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned.'))
-            except Exception as exc:
-                db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message=str(exc)[:500]))
+            except Exception:
+                db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message='Provider request failed. No provider result was retained as evidence.'))
         for item in items:
-            create_evidence(db, claim, item, fixture=bool(result['evidence'] and item.provider == 'VeriFact local fixture'))
+            create_evidence(db, claim, item, fixture=bool(use_fixture and item.provider == 'VeriFact local fixture'))
         db.commit()
-        if settings.mode != 'local-fixture' and is_enabled():
+        if settings.live_provider_mode and is_enabled():
             verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source)).filter(Verification.id == verification_id).first()
             analyzed_claim = verification.claims[0]
             packet = [{'id': evidence.id, 'source': evidence.source.name, 'url': evidence.source.canonical_url, 'source_type': evidence.source.source_type, 'quality_class': evidence.source.quality_class, 'published_at': evidence.published_at, 'excerpt': evidence.excerpt} for evidence in analyzed_claim.evidence]
