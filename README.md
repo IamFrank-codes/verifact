@@ -80,3 +80,11 @@ npm run build
 ```
 
 The backend suite verifies the core requirement that insufficient evidence produces a `null` score, source quality comes from a configured policy, and shared reports omit account data.
+
+## Production readiness
+
+VeriFact now includes a provider-neutral production Compose stack with HTTPS reverse proxy, PostgreSQL, Redis-backed verification jobs, a separate worker, Alembic migrations, structured health/readiness endpoints, rate limits, request limits, secure headers, SMTP-based password reset delivery, backup/restore scripts, and a production smoke-test script.
+
+> **Production mode never uses fixture evidence.** It requires HTTPS origins, PostgreSQL, Redis, secure cookies, and a non-default secret. If live providers are unavailable, the report must show an evidence limitation rather than demo data or an arbitrary score.
+
+Read [docs/deployment.md](docs/deployment.md) before configuring a public host. Copy `.env.production.example` to `.env.production` only on the production host, configure a domain/DNS and credentials there, then follow the backup → build → migration → deploy → readiness → smoke-test sequence. The public deployment itself is intentionally deferred until a hosting account, domain, SMTP provider, and any desired evidence-provider credentials are available.

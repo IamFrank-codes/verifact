@@ -1,25 +1,111 @@
 services:
+  verifact-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-verifact}
+      POSTGRES_USER: ${POSTGRES_USER:-verifact}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - verifact-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-verifact} -d ${POSTGRES_DB:-verifact}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  verifact-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}
+    volumes:
+      - verifact-redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$$REDIS_PASSWORD' ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}
+    networks: [internal]
+
+  verifact-migrate:
+    build: ./backend
+    env_file: .env.production
+    command: alembic upgrade head
+    environment:
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-verifact}:${POSTGRES_PASSWORD}@verifact-db:5432/${POSTGRES_DB:-verifact}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-db: {condition: service_healthy}
+    networks: [internal]
+    profiles: [ops]
+
   verifact-api:
     build: ./backend
-    environment:
-      VERIFACT_MODE: ${VERIFACT_MODE:-production}
-      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL}
-      VERIFACT_SECRET_KEY: ${VERIFACT_SECRET_KEY}
-      VERIFACT_FRONTEND_ORIGIN: ${VERIFACT_FRONTEND_ORIGIN}
-      VERIFACT_PUBLIC_BASE_URL: ${VERIFACT_PUBLIC_BASE_URL}
-      VERIFACT_SECURE_COOKIES: "true"
-      VERIFACT_GOOGLE_FACTCHECK_KEY: ${VERIFACT_GOOGLE_FACTCHECK_KEY:-}
-      VERIFACT_NEWSAPI_KEY: ${VERIFACT_NEWSAPI_KEY:-}
-      VERIFACT_OPENAI_API_KEY: ${VERIFACT_OPENAI_API_KEY:-}
     restart: unless-stopped
+    env_file: .env.production
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*
+    environment:
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-verifact}:${POSTGRES_PASSWORD}@verifact-db:5432/${POSTGRES_DB:-verifact}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-db: {condition: service_healthy}
+      verifact-redis: {condition: service_healthy}
+    expose: ["8000"]
+    networks: [internal]
+
   verifact-worker:
     build: ./backend
+    restart: unless-stopped
+    env_file: .env.production
     command: python -m app.worker
     environment:
-      VERIFACT_MODE: ${VERIFACT_MODE:-production}
-      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL}
-      VERIFACT_SECRET_KEY: ${VERIFACT_SECRET_KEY}
-    restart: unless-stopped
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-verifact}:${POSTGRES_PASSWORD}@verifact-db:5432/${POSTGRES_DB:-verifact}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-db: {condition: service_healthy}
+      verifact-redis: {condition: service_healthy}
+    networks: [internal]
+
   verifact-frontend:
     build: ./frontend
     restart: unless-stopped
+    expose: ["80"]
+    networks: [internal]
+
+  verifact-proxy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      VERIFACT_DOMAIN: ${VERIFACT_DOMAIN:?Set VERIFACT_DOMAIN in .env.production}
+      VERIFACT_TLS_EMAIL: ${VERIFACT_TLS_EMAIL:?Set VERIFACT_TLS_EMAIL in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - verifact-api
+      - verifact-frontend
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  verifact-postgres:
+  verifact-redis:
+  caddy-data:
+  caddy-config:

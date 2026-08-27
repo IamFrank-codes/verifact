@@ -8,3 +8,10 @@ dist/
 *.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+.env.production
+.env.*.local
+*.pem
+*.key
+backups/
+coverage.xml
+htmlcov/
