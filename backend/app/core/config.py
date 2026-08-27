@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     frontend_origin: str = 'http://localhost:5173'
     additional_cors_origins: str = ''
     public_base_url: str = 'http://localhost:5173'
-    allowed_hosts: str = 'localhost,127.0.0.1,testserver'
+    allowed_hosts: str = 'localhost,127.0.0.1,testserver,verifact-api'
     secure_cookies: bool = False
     score_coverage_threshold: float = 0.60
     max_input_chars: int = 24000

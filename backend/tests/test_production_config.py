@@ -32,3 +32,8 @@ def test_valid_production_configuration_is_accepted():
     settings = Settings(**production_kwargs())
     assert settings.is_production is True
     assert settings.cors_origins == ['https://verifact.example']
+
+
+def test_development_settings_allow_docker_api_hostname():
+    settings = Settings(environment='development', mode='local-fixture')
+    assert 'verifact-api' in settings.host_list
