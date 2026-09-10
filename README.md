@@ -70,6 +70,15 @@ Set `VERIFACT_MODE=hybrid` or `VERIFACT_MODE=production` and configure only the 
 
 Read [docs/SCORING_AND_EVIDENCE.md](docs/SCORING_AND_EVIDENCE.md) and [docs/SECURITY.md](docs/SECURITY.md) before production use. A public deployment needs HTTPS, non-default secrets, a dedicated database/backup policy, a real transactional email provider, rate limiting at the proxy/application layer, monitoring, and a policy review process.
 
+### Supabase PostgreSQL
+
+Supabase can replace the local SQLite database without changing the application
+data layer. Copy [.env.supabase.example](.env.supabase.example), set
+`VERIFACT_DATABASE_URL` to the Supabase PostgreSQL connection string, then run
+`alembic upgrade head` from `backend`. To copy existing local records into a
+new Supabase project, use
+[docs/supabase.md](docs/supabase.md) and the one-time migration helper.
+
 ## Tests
 
 ```bash
