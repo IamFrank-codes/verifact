@@ -1,4 +1,4 @@
-# VeriFact
+# VeriFact!
 
 > **VeriFact — Verify. Understand. Trust.**
 
