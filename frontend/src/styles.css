@@ -54,7 +54,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .user-menu{display:flex;gap:9px;align-items:center;font-size:13px;color:#42536b}
 .avatar{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#ddecf1;color:#175069;font-weight:800}
 .user-menu .link-button{margin-left:8px;font-size:12px}
-.app-page{width:100%;max-width:1120px;margin:0 auto;padding:clamp(30px,5vw,60px)}
+.app-page{width:100%;max-width:960px;margin:0 auto;padding:clamp(30px,5vw,60px)}
 .dashboard-hero{display:flex;justify-content:space-between;gap:28px;align-items:end;margin:12px 0 34px}
 .dashboard-hero h1,.verify-intro h1,.page-title h1,.report-heading h1{font:700 clamp(32px,4vw,50px)/1.03 Georgia,serif;letter-spacing:-.045em;margin:0;color:#10243f}
 .dashboard-hero>div>p:last-child,.verify-intro>p:last-child,.page-title>p:last-child{max-width:660px;color:#61718a;line-height:1.65;margin:14px 0 0}
@@ -86,7 +86,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .empty-state h3{font:700 23px Georgia,serif;color:#203d58;margin:17px 0 8px}
 .empty-state p{font-size:13px;margin:0 auto 19px;max-width:380px;line-height:1.55}
 .back-button{border:0;background:none;padding:0;color:#487085;font-size:13px;font-weight:750}
-.verify-page{max-width:1120px}
+.verify-page{max-width:960px}
 .verify-intro{margin:38px 0}
 .verification-form{background:#fff;border:1px solid #dbe5ed;border-radius:14px;padding:25px}
 .type-tabs{display:flex;gap:7px;border-bottom:1px solid #dbe5ed;margin:-4px 0 20px}
@@ -192,7 +192,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .table-row small{color:#8493a2;margin-top:5px;display:block}
 .table-row .status-pill{max-width:max-content}
 .trash{border:0;background:transparent;color:#b34a56;font-size:22px}
-.public-report{width:100%;max-width:1120px;margin:auto;padding:clamp(30px,5vw,60px)}
+.public-report{width:100%;max-width:960px;margin:auto;padding:clamp(30px,5vw,60px)}
 .public-top{height:82px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dbe5ed;margin-bottom:32px}
 .public-top>span{color:#718397;font-size:12px}
 .page-loading,.app-loading{min-height:100vh;display:grid;place-content:center;gap:13px;text-align:center;color:#61758b}
