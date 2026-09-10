@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     source_policy_path: str = 'app/fixtures/source_policy.json'
     model_config = SettingsConfigDict(env_file='.env', env_prefix='VERIFACT_', case_sensitive=False)
 
+    @field_validator('database_url', mode='before')
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        if value.startswith('postgres://'):
+            return 'postgresql+psycopg://' + value[len('postgres://'):]
+        if value.startswith('postgresql://'):
+            return 'postgresql+psycopg://' + value[len('postgresql://'):]
+        return value
+
     @field_validator('score_coverage_threshold')
     @classmethod
     def validate_threshold(cls, value: float) -> float:
@@ -68,6 +77,10 @@ class Settings(BaseSettings):
     @property
     def live_provider_mode(self) -> bool:
         return self.mode == 'production' or (self.mode == 'hybrid' and self.local_real_api_mode)
+
+    @property
+    def uses_sqlite(self) -> bool:
+        return self.database_url.startswith('sqlite')
 
     @model_validator(mode='after')
     def validate_production(self):

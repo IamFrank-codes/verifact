@@ -79,7 +79,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.on_event('startup')
 def startup():
     # Development remains one-command friendly. Production schema changes are executed by Alembic.
-    if not settings.is_production:
+    if not settings.is_production and settings.uses_sqlite:
         Base.metadata.create_all(bind=engine)
 
 

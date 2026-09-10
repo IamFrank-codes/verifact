@@ -35,7 +35,7 @@ def local_polling_loop():
 
 
 def main():
-    if not settings.is_production:
+    if not settings.is_production and settings.uses_sqlite:
         Base.metadata.create_all(bind=engine)
     if settings.redis_url:
         worker = Worker([QUEUE_NAME], connection=get_redis(), name='verifact-worker')
