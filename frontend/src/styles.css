@@ -255,6 +255,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .button:focus-visible, .link-button:focus-visible, .back-button:focus-visible, .nav-toggle:focus-visible { outline: 3px solid #7bc4d1; outline-offset: 3px; }
 .loading-state { margin: 12px 0; padding: 14px; border: 1px dashed #becfda; border-radius: var(--radius-card); color: var(--color-muted); background: var(--color-surface); text-align: center; }
 .notice[role="status"] { min-height: 42px; }
+.verification-status-message { display: block; animation: verification-status-in .22s ease-out; }
+@keyframes verification-status-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .nav-toggle { display: none; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-brand); border-radius: var(--radius-control); padding: 8px 11px; font-weight: 750; }
 .type-tabs [role="tab"] { min-height: 44px; }
 .type-tabs [aria-selected="true"] { color: #174d69; border-color: var(--color-accent); }
