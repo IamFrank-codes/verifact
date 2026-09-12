@@ -35,7 +35,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .principle>span{color:#8bd7d7;font:700 12px monospace;padding-top:4px}
 .principle b{color:#fff}
 .principle p{margin:4px 0;color:#a8c1d4;font-size:13px;line-height:1.5}
-.auth-card{align-self:center;width:min(440px,100%);padding:46px;margin:20px auto}
+.auth-card{align-self:start;width:min(440px,100%);padding:clamp(28px,5vh,46px) 46px;margin:0 auto}
 .auth-card>.brand{display:none}
 .auth-heading{margin:36px 0 26px}
 .auth-heading h2{font-family:Georgia,serif;letter-spacing:-.035em;font-size:32px;margin:7px 0 9px}
