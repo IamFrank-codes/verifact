@@ -4,6 +4,8 @@
 
 VeriFact is an evidence-based news and claim verification MVP. It separates retrieved evidence, source-policy classification, evidence-bounded interpretation, and deterministic scoring. It never treats an AI response alone as proof. When evidence coverage does not meet the configured threshold, the report is explicitly **scoreless**.
 
+See the [changelog](CHANGELOG.md) for project history and the [local-to-production plan](docs/local-to-production-plan.md) for the Supabase, FastAPI, OpenAI, and evidence-provider deployment path.
+
 ## What works in the local MVP
 
 The default `local-fixture` mode requires no external credentials. It includes authentication, non-enumerating password-reset behavior, text/URL/claim submission, source-policy classification, fixture evidence, supported/contradicted/insufficient-evidence reports, transparent score eligibility, history, private/public reports, a responsive React interface, API docs, and Docker services.
