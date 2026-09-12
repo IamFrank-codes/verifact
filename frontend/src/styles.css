@@ -24,13 +24,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .dev-token{display:block;margin-top:9px;word-break:break-all}
 .dev-token code{background:#fff;padding:3px 5px;border-radius:4px}
 .auth-page{min-height:100vh;display:grid;grid-template-columns:minmax(300px,42%) 1fr;background:#fff}
-.auth-aside{background:#102d50;padding:clamp(34px,7vw,96px);color:#d9e8f3;display:flex;flex-direction:column;align-items:flex-start}
+.auth-aside{background:#102d50;padding:clamp(24px,5vw,64px);color:#d9e8f3;display:flex;flex-direction:column;align-items:flex-start}
 .auth-aside .brand{color:white}
 .auth-aside .brand small{color:#bdd3e1}
 .auth-aside .mark{background:#eff7fb;color:#173e60}
-.auth-aside h1{font-family:Georgia,serif;font-size:clamp(34px,4vw,56px);line-height:1.05;letter-spacing:-.045em;margin:80px 0 20px;max-width:570px}
+.auth-aside h1{font-family:Georgia,serif;font-size:clamp(34px,4vw,56px);line-height:1.05;letter-spacing:-.045em;margin:64px 0 20px;max-width:570px}
 .auth-aside>p{max-width:500px;color:#a8c1d4;line-height:1.7}
-.auth-aside .eyebrow{color:#8bd7d7;margin-top:45px}
+.auth-aside .eyebrow{color:#8bd7d7;margin-top:36px}
 .principle{display:flex;gap:14px;margin-top:26px;max-width:430px}
 .principle>span{color:#8bd7d7;font:700 12px monospace;padding-top:4px}
 .principle b{color:#fff}
