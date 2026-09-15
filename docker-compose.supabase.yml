@@ -1,0 +1,39 @@
+services:
+  # Supabase replaces the local PostgreSQL service. The connection string is
+  # supplied by VERIFACT_DATABASE_URL in .env.supabase.production. The local
+  # database remains available only when the self-hosted profile is requested.
+  verifact-db:
+    profiles: [self-hosted]
+
+  verifact-migrate:
+    env_file: .env.supabase.production
+    environment:
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in .env.supabase.production}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-redis: {condition: service_healthy}
+
+  verifact-api:
+    env_file: .env.supabase.production
+    environment:
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in .env.supabase.production}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-redis: {condition: service_healthy}
+
+  verifact-worker:
+    env_file: .env.supabase.production
+    environment:
+      VERIFACT_ENVIRONMENT: production
+      VERIFACT_MODE: production
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in .env.supabase.production}
+      VERIFACT_REDIS_URL: redis://:${REDIS_PASSWORD}@verifact-redis:6379/0
+    depends_on:
+      verifact-redis: {condition: service_healthy}
+
+  verifact-proxy:
+    env_file: .env.supabase.production

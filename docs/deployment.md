@@ -19,6 +19,8 @@ flowchart TB
 
 The production stack uses Caddy for certificates and HTTPS, a frontend container, a FastAPI API container, a separate Redis-backed worker, PostgreSQL, and Redis. No fixture evidence is used in `VERIFACT_MODE=production`; missing provider evidence remains an evidence limitation and never becomes a score or fabricated source.
 
+For the Supabase deployment path, use `docker-compose.prod.yml` together with `docker-compose.supabase.yml`. The overlay removes the local PostgreSQL service and points the migration job, API, and worker at the Supabase PostgreSQL connection string while retaining Redis locally for the current RQ worker.
+
 ## Prerequisites
 
 The operator needs a Linux host capable of running Docker Compose, a public static IP address, a domain, and DNS control. The host must allow inbound TCP ports 80 and 443. The domain’s DNS records must point to the host before Caddy can obtain a certificate.
@@ -31,6 +33,29 @@ The operator needs a Linux host capable of running Docker Compose, a public stat
 | OpenAI and evidence-provider credentials | You | Optional; production degrades to evidence limits when absent |
 | SMTP/transactional email account | You | Yes for real password-reset delivery |
 | Backups and off-host backup storage | You | Yes |
+
+## External API and service requirements
+
+The following accounts and credentials are required before the corresponding production capability can be enabled:
+
+| Service | Required for | What you must provide | Production note |
+|---|---|---|---|
+| Supabase | Hosted PostgreSQL | Project reference and the server-side PostgreSQL connection string from **Connect** | Keep the password URL-encoded and require TLS. Do not put the connection string in frontend code. |
+| OpenAI | Evidence-bounded structured analysis | An OpenAI API key, selected model, and an account with billing or usage capacity enabled | The key stays in FastAPI. OpenAI assists with retained evidence; it does not calculate the VeriFact score. |
+| Google Fact Check Tools | Retrieval of existing ClaimReview records | A Google Cloud project, enabled Fact Check Tools API, and a restricted API key | Start with Claim Search. Confirm project quota and billing exposure in Google Cloud before launch. A no-match is not a truth verdict. |
+| GDELT | Optional news discovery and timeline context | No API key is normally required; enable it only after a connectivity and rate-limit probe | Treat it as non-critical enrichment. Cache requests and back off on errors because a numeric quota or SLA is not documented. |
+| NewsAPI | Optional paid news discovery | An API key and a production-eligible paid plan | The Developer plan is not for production, staging, or internal production use. Review quota, overages, attribution, and content-use terms before enabling it. |
+| SMTP provider | Real password-reset email | SMTP host, port, username, password, and verified sender address | Mailpit is local-only. Test delivery and sender authentication before launch. |
+| Hosting and DNS | Public HTTPS service | Docker-capable host, public IP, domain, DNS access, and inbound ports 80/443 | Caddy obtains and renews the certificate after DNS points to the host. |
+
+Create the Supabase environment file from the committed template:
+
+```bash
+cp .env.supabase.production.example .env.supabase.production
+chmod 600 .env.supabase.production
+```
+
+Fill in every required deployment value. Provider keys may remain blank during an internal infrastructure test, but live verification will then produce an evidence limitation rather than fixture evidence. `VERIFACT_OPENAI_API_KEY`, `VERIFACT_GOOGLE_FACTCHECK_KEY`, and a production NewsAPI key are not interchangeable; each comes from its own service.
 
 ## 1. Prepare the host
 
@@ -53,7 +78,7 @@ The production Compose stack starts Caddy as the public entry point. Caddy reque
 
 ## 3. Configure production services and credentials
 
-Set `VERIFACT_MODE=production` and `VERIFACT_ENVIRONMENT=production`. The application validates that production uses HTTPS origins, PostgreSQL, Redis, secure cookies, and a non-default secret before it starts.
+Set `VERIFACT_MODE=production` and `VERIFACT_ENVIRONMENT=production`. The application validates that production uses HTTPS origins, PostgreSQL, Redis, secure cookies, and a non-default secret before it starts. With Supabase, use the external PostgreSQL URL in `.env.supabase.production` rather than the local `verifact-db` URL.
 
 Configure `VERIFACT_OPENAI_API_KEY` and `VERIFACT_OPENAI_MODEL` only in `.env.production`. Add Google Fact Check, NewsAPI, and any future provider credentials only when you have accounts for them. Provider errors are retained as internal job results and do not become proof, evidence, or fixture data.
 
@@ -65,10 +90,10 @@ For a first deployment, build images, run the migration profile, then start the 
 
 ```bash
 chmod +x ops/*.sh scripts/production_smoke.sh
-docker compose -f docker-compose.prod.yml --env-file .env.production build
-docker compose -f docker-compose.prod.yml --env-file .env.production --profile ops run --rm verifact-migrate
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-docker compose -f docker-compose.prod.yml --env-file .env.production ps
+docker compose -f docker-compose.prod.yml -f docker-compose.supabase.yml --env-file .env.supabase.production build
+docker compose -f docker-compose.prod.yml -f docker-compose.supabase.yml --env-file .env.supabase.production --profile ops run --rm verifact-migrate
+docker compose -f docker-compose.prod.yml -f docker-compose.supabase.yml --env-file .env.supabase.production up -d
+docker compose -f docker-compose.prod.yml -f docker-compose.supabase.yml --env-file .env.supabase.production ps
 ```
 
 Run migrations before changing application containers. The production API intentionally does not call `Base.metadata.create_all`; Alembic is the authoritative schema process. Do not run `docker compose down --volumes` on a production host because it destroys persistent data.
