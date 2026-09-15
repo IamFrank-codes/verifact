@@ -221,6 +221,10 @@ def create_verification(payload: VerificationInput, user: User = Depends(current
         raise HTTPException(status_code=413, detail='The submission exceeds the VeriFact input limit.')
     v = Verification(user_id=user.id, input_type=payload.input_type, original_input=payload.content.strip(), mode=settings.mode)
     db.add(v); db.commit(); db.refresh(v)
+    if settings.mode in {'hybrid', 'production'} and settings.inline_processing:
+        run_verification(db, v.id)
+        completed = get_owned(db, user, v.id)
+        return {'id': completed.id, 'mode': settings.mode, 'status': completed.status, 'stage': completed.stage, 'message': 'VeriFact completed live evidence processing inline.', 'report': verification_out(completed)}
     if settings.mode in {'hybrid', 'production'}:
         try:
             job_id = enqueue_verification(v.id)

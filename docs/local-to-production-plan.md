@@ -6,6 +6,14 @@ VeriFact should move to production by keeping **FastAPI as the application and o
 
 The production system should preserve VeriFact’s central rule: external APIs retrieve evidence, OpenAI may assist with evidence-bounded interpretation, and VeriFact—not a provider or model—calculates the deterministic score. A missing provider result must remain an evidence limitation rather than become an automatic true, false, or low-confidence label.
 
+## Academic demo track
+
+For an academic demonstration, a public deployment is unnecessary. Use the new `hybrid` plus `VERIFACT_INLINE_PROCESSING=true` configuration on a local machine. The browser and FastAPI server remain local, while FastAPI calls the real external providers and writes reports to Supabase PostgreSQL. Redis, Docker, a public domain, Caddy, and public hosting are not required for this track.
+
+Copy `.env.academic-demo.example` to `backend/.env`, fill in the Supabase connection string and provider keys, start the backend and frontend normally, and submit a claim. The Verify request will process inline and return a report after provider retrieval and optional OpenAI analysis finish. This is appropriate for a live academic demo because it proves real network retrieval, evidence provenance, scoring behavior, and failure handling without claiming public production readiness.
+
+The demo should use a claim likely to have an existing fact-check record and a second claim likely to retrieve current news coverage. Show the provider name, canonical source link, retrieval date, evidence relationship, and the distinction between a prior publisher fact check and VeriFact’s own evidence-bounded assessment. Do not present a no-match as proof of truth or falsity.
+
 ## Target architecture
 
 ```text

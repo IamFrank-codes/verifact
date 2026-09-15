@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     newsapi_key: str | None = None
     gdelt_enabled: bool = False
     local_real_api_mode: bool = False
+    inline_processing: bool = False
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_model: str = 'gpt-4o-mini'
@@ -95,7 +96,7 @@ class Settings(BaseSettings):
                 raise ValueError('Production requires HTTPS VERIFACT_FRONTEND_ORIGIN and VERIFACT_PUBLIC_BASE_URL.')
             if not self.database_url.startswith('postgresql'):
                 raise ValueError('Production requires a PostgreSQL VERIFACT_DATABASE_URL.')
-            if not self.redis_url:
+            if not self.redis_url and not self.inline_processing:
                 raise ValueError('Production requires VERIFACT_REDIS_URL.')
         return self
 

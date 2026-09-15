@@ -168,3 +168,18 @@ docker compose up --build
 ```
 
 This keeps `VERIFACT_MODE=local-fixture`, Mailpit, deterministic evidence fixtures, and the local reset token helper available only for development.
+
+## Academic real-API demonstration without Docker
+
+If the objective is to demonstrate real-time provider retrieval rather than public hosting, use the lightweight academic demo track. It runs the frontend and FastAPI locally, stores data in Supabase PostgreSQL or local SQLite, and calls configured external providers directly from FastAPI. It does not require Docker, Redis, Caddy, DNS, or a public domain.
+
+```bash
+cp .env.academic-demo.example backend/.env
+chmod 600 backend/.env
+```
+
+Fill in `VERIFACT_DATABASE_URL`, `VERIFACT_OPENAI_API_KEY`, and `VERIFACT_GOOGLE_FACTCHECK_KEY`. Enable `VERIFACT_GDELT_ENABLED=true` only after confirming it responds from your network. Add `VERIFACT_NEWSAPI_KEY` only when a suitable plan is available. Keep `VERIFACT_MODE=hybrid`, `VERIFACT_LOCAL_REAL_API_MODE=true`, and `VERIFACT_INLINE_PROCESSING=true`.
+
+Start the backend and frontend using the existing local instructions. Submit a claim from `http://localhost:5173/verify`. The request will wait for the live provider calls and return the completed report without a Redis worker. This is suitable for an academic presentation, but it is not a high-concurrency production architecture because one API request remains open during processing.
+
+For the strongest demonstration, show one claim with a matching Google Fact Check record, one claim with relevant current source retrieval, the provider provenance and canonical links, and an insufficient-evidence case. Explain that OpenAI interprets only the retained evidence packet and that the final score remains VeriFact’s deterministic calculation.
