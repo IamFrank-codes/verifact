@@ -6,6 +6,7 @@ services:
   # Inline processing does not need the background worker.
   verifact-worker:
     profiles: [worker]
+    depends_on: null
 
   verifact-api:
     env_file:
@@ -18,7 +19,7 @@ services:
       VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in backend/.env}
       VERIFACT_REDIS_URL: ""
       VERIFACT_ALLOWED_HOSTS: localhost,127.0.0.1,verifact-api
-    depends_on: {}
+    depends_on: null
 
   verifact-frontend:
     environment:
