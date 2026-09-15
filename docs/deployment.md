@@ -183,3 +183,12 @@ Fill in `VERIFACT_DATABASE_URL`, `VERIFACT_OPENAI_API_KEY`, and `VERIFACT_GOOGLE
 Start the backend and frontend using the existing local instructions. Submit a claim from `http://localhost:5173/verify`. The request will wait for the live provider calls and return the completed report without a Redis worker. This is suitable for an academic presentation, but it is not a high-concurrency production architecture because one API request remains open during processing.
 
 For the strongest demonstration, show one claim with a matching Google Fact Check record, one claim with relevant current source retrieval, the provider provenance and canonical links, and an insufficient-evidence case. Explain that OpenAI interprets only the retained evidence packet and that the final score remains VeriFact’s deterministic calculation.
+
+Docker is also supported for this academic track. The Docker overlay uses Supabase PostgreSQL, keeps the frontend and API in containers, and disables the Redis worker because inline processing is enabled. From the repository root, after creating `backend/.env`, validate and start it with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env config
+docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env up --build
+```
+
+Open `http://localhost:5173`. Stop the demo with `Ctrl+C`, or use `docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env down`. Do not use `down --volumes` unless you intentionally want to remove local Docker volumes. Supabase data is external to the Docker volume, but deleting volumes can still remove local development state.

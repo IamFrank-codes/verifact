@@ -1,0 +1,25 @@
+services:
+  # Use Supabase PostgreSQL for the academic demo instead of the bundled database.
+  verifact-db:
+    profiles: [self-hosted]
+
+  # Inline processing does not need the background worker.
+  verifact-worker:
+    profiles: [worker]
+
+  verifact-api:
+    env_file:
+      - ./backend/.env
+    environment:
+      VERIFACT_ENVIRONMENT: development
+      VERIFACT_MODE: hybrid
+      VERIFACT_LOCAL_REAL_API_MODE: "true"
+      VERIFACT_INLINE_PROCESSING: "true"
+      VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in backend/.env}
+      VERIFACT_REDIS_URL: ""
+      VERIFACT_ALLOWED_HOSTS: localhost,127.0.0.1,verifact-api
+    depends_on: {}
+
+  verifact-frontend:
+    environment:
+      VITE_API_PROXY_TARGET: http://verifact-api:8000
