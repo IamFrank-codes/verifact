@@ -187,11 +187,11 @@ For the strongest demonstration, show one claim with a matching Google Fact Chec
 Docker is also supported for this academic track. The Docker overlay uses Supabase PostgreSQL, keeps the frontend and API in containers, and disables the Redis worker because inline processing is enabled. From the repository root, after creating `backend/.env`, validate and start it with:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env config
-docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env up --build
+docker compose -f docker-compose.academic.yml --env-file backend/.env config
+docker compose -f docker-compose.academic.yml --env-file backend/.env up --build
 ```
 
-Open `http://localhost:5173`. Stop the demo with `Ctrl+C`, or use `docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env down`. Do not use `down --volumes` unless you intentionally want to remove local Docker volumes. Supabase data is external to the Docker volume, but deleting volumes can still remove local development state.
+Open `http://localhost:5173`. Stop the demo with `Ctrl+C`, or use `docker compose -f docker-compose.academic.yml --env-file backend/.env down`. Do not use `down --volumes` unless you intentionally want to remove local Docker volumes. Supabase data is external to the Docker volume, but deleting volumes can still remove local development state.
 
 The same workflow is available through `scripts/academic_demo.ps1` on Windows PowerShell:
 

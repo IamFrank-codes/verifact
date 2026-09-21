@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ACTION="${1:-start}"
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env)
+COMPOSE=(docker compose -f docker-compose.academic.yml --env-file backend/.env)
 
 command -v docker >/dev/null 2>&1 || { echo 'Docker was not found. Install Docker and try again.' >&2; exit 1; }
 test -f backend/.env || { echo 'Missing backend/.env. Copy backend/.env.example and add your private credentials.' >&2; exit 1; }

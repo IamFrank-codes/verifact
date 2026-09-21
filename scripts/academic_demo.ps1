@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$ComposeFiles = @('-f', 'docker-compose.yml', '-f', 'docker-compose.academic.yml')
+$ComposeFiles = @('-f', 'docker-compose.academic.yml')
 $EnvFile = 'backend/.env'
 
 Set-Location $Root

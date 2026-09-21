@@ -1,14 +1,10 @@
 services:
-  # Use Supabase PostgreSQL for the academic demo instead of the bundled database.
-  verifact-db:
-    profiles: [self-hosted]
-
-  # Inline processing does not need the background worker.
-  verifact-worker:
-    profiles: [worker]
-    depends_on: null
-
   verifact-api:
+    build: ./backend
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /app
+    volumes:
+      - ./backend:/app
     env_file:
       - ./backend/.env
     environment:
@@ -18,9 +14,22 @@ services:
       VERIFACT_INLINE_PROCESSING: "true"
       VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in backend/.env}
       VERIFACT_REDIS_URL: ""
+      VERIFACT_FRONTEND_ORIGIN: http://localhost:5173
+      VERIFACT_PUBLIC_BASE_URL: http://localhost:5173
+      VERIFACT_SECURE_COOKIES: "false"
       VERIFACT_ALLOWED_HOSTS: localhost,127.0.0.1,verifact-api
-    depends_on: null
+    ports:
+      - "8000:8000"
 
   verifact-frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     environment:
       VITE_API_PROXY_TARGET: http://verifact-api:8000
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    depends_on:
+      - verifact-api
