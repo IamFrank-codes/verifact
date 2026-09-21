@@ -192,3 +192,22 @@ docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file b
 ```
 
 Open `http://localhost:5173`. Stop the demo with `Ctrl+C`, or use `docker compose -f docker-compose.yml -f docker-compose.academic.yml --env-file backend/.env down`. Do not use `down --volumes` unless you intentionally want to remove local Docker volumes. Supabase data is external to the Docker volume, but deleting volumes can still remove local development state.
+
+The same workflow is available through `scripts/academic_demo.ps1` on Windows PowerShell:
+
+```powershell
+.\scripts\academic_demo.ps1 -Action start
+.\scripts\academic_demo.ps1 -Action status
+.\scripts\academic_demo.ps1 -Action logs
+.\scripts\academic_demo.ps1 -Action stop
+```
+
+On macOS or Linux, use the Bash equivalent:
+
+```bash
+chmod +x scripts/academic_demo.sh
+./scripts/academic_demo.sh start
+./scripts/academic_demo.sh status
+./scripts/academic_demo.sh logs
+./scripts/academic_demo.sh stop
+```
