@@ -180,6 +180,28 @@ chmod 600 backend/.env
 
 Fill in `VERIFACT_DATABASE_URL`, `VERIFACT_OPENAI_API_KEY`, and `VERIFACT_GOOGLE_FACTCHECK_KEY`. Enable `VERIFACT_GDELT_ENABLED=true` only after confirming it responds from your network. Add `VERIFACT_NEWSAPI_KEY` only when a suitable plan is available. Keep `VERIFACT_MODE=hybrid`, `VERIFACT_LOCAL_REAL_API_MODE=true`, and `VERIFACT_INLINE_PROCESSING=true`.
 
+For real password reset and account verification, also configure an SMTP provider in `backend/.env`:
+
+```env
+VERIFACT_SMTP_HOST=smtp.example.com
+VERIFACT_SMTP_PORT=587
+VERIFACT_SMTP_USERNAME=your-smtp-username
+VERIFACT_SMTP_PASSWORD=your-smtp-password
+VERIFACT_SMTP_FROM_EMAIL=no-reply@example.com
+VERIFACT_SMTP_FROM_NAME=VeriFact
+VERIFACT_SMTP_STARTTLS=true
+```
+
+The sender address must be accepted by the SMTP provider. For Gmail, use an app password rather than the normal account password. For a transactional provider such as Brevo, Mailgun, SendGrid, or Amazon SES, use the SMTP credentials shown by that provider. Do not use a personal password in the repository.
+
+After pulling this feature, apply the new token-table migration to Supabase:
+
+```bash
+docker compose -f docker-compose.academic.yml --env-file backend/.env run --rm verifact-api alembic upgrade head
+```
+
+New accounts receive a verification link and cannot sign in until the link is used. The Forgot Password action now returns an error when SMTP delivery fails instead of silently reporting success. The verification screen can resend the account-verification email.
+
 Start the backend and frontend using the existing local instructions. Submit a claim from `http://localhost:5173/verify`. The request will wait for the live provider calls and return the completed report without a Redis worker. This is suitable for an academic presentation, but it is not a high-concurrency production architecture because one API request remains open during processing.
 
 For the strongest demonstration, show one claim with a matching Google Fact Check record, one claim with relevant current source retrieval, the provider provenance and canonical links, and an insufficient-evidence case. Explain that OpenAI interprets only the retained evidence packet and that the final score remains VeriFact’s deterministic calculation.

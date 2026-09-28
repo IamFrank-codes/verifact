@@ -16,10 +16,10 @@ from slowapi.util import get_remote_address
 
 from app.core.config import get_settings
 from app.db import Base, engine, get_db
-from app.models import Claim, Evidence, PasswordResetToken, ProviderRun, User, Verification
-from app.schemas import ForgotPasswordInput, LoginInput, RegisterInput, ResetPasswordInput, ShareInput, VerificationInput
+from app.models import Claim, EmailVerificationToken, Evidence, PasswordResetToken, ProviderRun, User, Verification
+from app.schemas import ForgotPasswordInput, LoginInput, RegisterInput, ResendVerificationInput, ResetPasswordInput, ShareInput, VerificationInput, VerifyEmailInput
 from app.security import create_access_token, decode_access_token, hash_password, new_reset_token, token_hash, verify_password
-from app.services.email import send_password_reset_email
+from app.services.email import send_email_verification_email, send_password_reset_email
 from app.services.jobs import enqueue_verification, redis_ready
 from app.services.verification import run_verification
 
@@ -152,9 +152,21 @@ def register(request: Request, payload: RegisterInput, response: Response, db: S
         raise HTTPException(status_code=409, detail='An account with this email already exists.')
     user = User(full_name=payload.full_name.strip(), email=payload.email.lower(), password_hash=hash_password(payload.password))
     db.add(user); db.commit(); db.refresh(user)
-    token = create_access_token(user.id)
-    response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
-    return {'user': user_out(user)}
+    if settings.mode == 'local-fixture':
+        user.email_verified = True
+        db.commit()
+        token = create_access_token(user.id)
+        response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
+        return {'user': user_out(user)}
+    raw_token, hashed_token = new_reset_token()
+    db.add(EmailVerificationToken(user_id=user.id, token_hash=hashed_token, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
+    db.commit()
+    try:
+        send_email_verification_email(user.email, raw_token)
+    except Exception as exc:
+        logger.exception('Account created but verification email delivery failed')
+        raise HTTPException(status_code=503, detail='Your account was created, but VeriFact could not send the verification email. Configure SMTP and use resend verification.') from exc
+    return {'message': 'Account created. Check your email to verify your account before signing in.', 'requires_email_verification': True}
 
 
 @app.post('/api/v1/auth/login')
@@ -163,9 +175,44 @@ def login(request: Request, payload: LoginInput, response: Response, db: Session
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail='Invalid email or password.')
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail='Please verify your email address before signing in.')
     token = create_access_token(user.id)
     response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
     return {'user': user_out(user)}
+
+
+@app.post('/api/v1/auth/verify-email')
+def verify_email(payload: VerifyEmailInput, response: Response, db: Session = Depends(get_db)):
+    record = db.query(EmailVerificationToken).filter(EmailVerificationToken.token_hash == token_hash(payload.token), EmailVerificationToken.used_at.is_(None)).first()
+    expires_at = record.expires_at.replace(tzinfo=timezone.utc) if record and record.expires_at.tzinfo is None else (record.expires_at if record else None)
+    if not record or not expires_at or expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail='This verification link is invalid or has expired.')
+    user = db.get(User, record.user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail='This verification link is invalid or has expired.')
+    user.email_verified = True
+    record.used_at = datetime.now(timezone.utc)
+    db.commit()
+    token = create_access_token(user.id)
+    response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
+    return {'message': 'Email verified. Your VeriFact account is ready.', 'user': user_out(user)}
+
+
+@app.post('/api/v1/auth/resend-verification')
+@limiter.limit(settings.rate_limit_auth)
+def resend_verification(request: Request, payload: ResendVerificationInput, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    if user and not user.email_verified:
+        raw_token, hashed_token = new_reset_token()
+        db.add(EmailVerificationToken(user_id=user.id, token_hash=hashed_token, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
+        db.commit()
+        try:
+            send_email_verification_email(user.email, raw_token)
+        except Exception as exc:
+            logger.exception('Verification email delivery failed')
+            raise HTTPException(status_code=503, detail='VeriFact could not send the verification email. Check the SMTP configuration.') from exc
+    return {'message': 'If an unverified account exists for that email, VeriFact has sent a new verification link.'}
 
 
 @app.post('/api/v1/auth/logout')
@@ -190,11 +237,12 @@ def forgot_password(request: Request, payload: ForgotPasswordInput, db: Session 
         db.commit()
         if settings.mode == 'local-fixture':
             dev_token = raw
-        elif settings.smtp_configured:
+        else:
             try:
                 send_password_reset_email(user.email, raw)
-            except Exception:
+            except Exception as exc:
                 logger.exception('Password-reset email delivery failed')
+                raise HTTPException(status_code=503, detail='VeriFact could not send the password-reset email. Check the SMTP configuration.') from exc
     result = {'message': 'If an account exists for that email, VeriFact has sent reset instructions.'}
     if dev_token:
         result['development_reset_token'] = dev_token

@@ -20,6 +20,12 @@ class LoginInput(BaseModel):
 class ForgotPasswordInput(BaseModel):
     email: EmailStr
 
+class VerifyEmailInput(BaseModel):
+    token: str = Field(min_length=20)
+
+class ResendVerificationInput(BaseModel):
+    email: EmailStr
+
 class ResetPasswordInput(BaseModel):
     token: str = Field(min_length=20)
     password: str = Field(min_length=10, max_length=128)

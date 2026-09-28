@@ -6,6 +6,9 @@ All notable changes to VeriFact are documented here. Entries are grouped by date
 
 ### Added
 
+- Added SMTP-backed password-reset delivery and email-verification links with resend support; hybrid and production accounts must verify their email before signing in.
+- Added the email-verification token migration and frontend verification screen.
+
 - Added an academic real-API demonstration path using hybrid mode with inline processing, so live provider calls can run locally without Docker, Redis, a domain, or public hosting.
 - Added a Docker academic-demo overlay for running the frontend and FastAPI against Supabase PostgreSQL with inline processing.
 - Added `scripts/academic_demo.ps1` and `scripts/academic_demo.sh` with start, stop, restart, status, and logs actions.
