@@ -161,12 +161,15 @@ def register(request: Request, payload: RegisterInput, response: Response, db: S
     raw_token, hashed_token = new_reset_token()
     db.add(EmailVerificationToken(user_id=user.id, token_hash=hashed_token, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
     db.commit()
+    verification_email_sent = True
     try:
         send_email_verification_email(user.email, raw_token)
-    except Exception as exc:
+    except Exception:
+        verification_email_sent = False
         logger.exception('Account created but verification email delivery failed')
-        raise HTTPException(status_code=503, detail='Your account was created, but VeriFact could not send the verification email. Configure SMTP and use resend verification.') from exc
-    return {'message': 'Account created. Check your email to verify your account before signing in.', 'requires_email_verification': True}
+    token = create_access_token(user.id)
+    response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
+    return {'user': user_out(user), 'message': 'Account created. Check your email to verify your account.', 'verification_email_sent': verification_email_sent}
 
 
 @app.post('/api/v1/auth/login')
@@ -175,8 +178,6 @@ def login(request: Request, payload: LoginInput, response: Response, db: Session
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail='Invalid email or password.')
-    if not user.email_verified:
-        raise HTTPException(status_code=403, detail='Please verify your email address before signing in.')
     token = create_access_token(user.id)
     response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
     return {'user': user_out(user)}
