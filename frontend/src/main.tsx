@@ -10,8 +10,19 @@ type ScoreDetails = {eligible:boolean; eligibility_reason:string; formula_versio
 type Verification = {id:string; input_type:string; original_input:string; status:string; stage:string; evidence_status:string; summary:string; score:number|null; score_band:string|null; coverage_pct:number|null; policy_version:string; is_public:boolean; public_id:string|null; mode:string; error_message:string|null; created_at:string; completed_at:string|null; score_details?:ScoreDetails|null; article?:{url?:string; title?:string; author?:string; publisher?:string; published_at?:string; extraction_status:string}|null; claims?:Claim[]; provider_runs?:{provider:string;status:string;message?:string}[]}
 type Stats = {total:number; average_score:number|null; scored_reports:number; insufficient_evidence_reports:number}
 
+const API_TIMEOUT_MS = 15_000
 const api = async <T,>(path:string, options:RequestInit = {}):Promise<T> => {
-  const response = await fetch(path, {credentials:'include', headers:{'Content-Type':'application/json', ...(options.headers||{})}, ...options})
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  let response:Response
+  try {
+    response = await fetch(path, {...options, credentials:'include', headers:{'Content-Type':'application/json', ...(options.headers||{})}, signal:controller.signal})
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error('VeriFact server did not respond within 15 seconds. Check your connection and try again.')
+    throw new Error('Could not reach the VeriFact server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
   const body = await response.json().catch(()=>({detail:'VeriFact could not read the server response.'}))
   const detail = Array.isArray(body.detail) ? body.detail.map((item:{msg?:string})=>item.msg||'Invalid input.').join(' ') : typeof body.detail === 'string' ? body.detail : typeof body.message === 'string' ? body.message : 'VeriFact could not complete that request.'
   if(!response.ok) throw new Error(detail)
