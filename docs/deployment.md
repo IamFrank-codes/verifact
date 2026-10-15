@@ -173,12 +173,14 @@ This keeps `VERIFACT_MODE=local-fixture`, Mailpit, deterministic evidence fixtur
 
 If the objective is to demonstrate real-time provider retrieval rather than public hosting, use the lightweight academic demo track. It runs the frontend and FastAPI locally, stores data in Supabase PostgreSQL or local SQLite, and calls configured external providers directly from FastAPI. It does not require Docker, Redis, Caddy, DNS, or a public domain.
 
+This is VeriFact's canonical local integration-test profile. When adding or changing provider/configuration behavior, keep `backend/.env` and `.env.academic-demo.example` aligned, and verify the change with `VERIFACT_MODE=hybrid`, `VERIFACT_LOCAL_REAL_API_MODE=true`, and `VERIFACT_INLINE_PROCESSING=true` before relying on other deployment profiles.
+
 ```bash
 cp .env.academic-demo.example backend/.env
 chmod 600 backend/.env
 ```
 
-Fill in `VERIFACT_DATABASE_URL`, `VERIFACT_OPENAI_API_KEY`, and `VERIFACT_GOOGLE_FACTCHECK_KEY`. Enable `VERIFACT_GDELT_ENABLED=true` only after confirming it responds from your network. Add `VERIFACT_NEWSAPI_KEY` only when a suitable plan is available. Keep `VERIFACT_MODE=hybrid`, `VERIFACT_LOCAL_REAL_API_MODE=true`, and `VERIFACT_INLINE_PROCESSING=true`.
+Fill in `VERIFACT_DATABASE_URL`, `VERIFACT_OPENAI_API_KEY`, and `VERIFACT_GOOGLE_FACTCHECK_KEY`. GDELT is enabled by default in the academic-demo template and requires no API key; if it is rate-limited on your network, the report should record it as unavailable rather than treating it as evidence. Add `VERIFACT_NEWSAPI_KEY` only when a suitable plan is available. Keep `VERIFACT_MODE=hybrid`, `VERIFACT_LOCAL_REAL_API_MODE=true`, and `VERIFACT_INLINE_PROCESSING=true`.
 
 For real password reset and account verification, also configure an SMTP provider in `backend/.env`:
 
