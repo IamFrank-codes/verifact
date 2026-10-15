@@ -96,8 +96,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .type-tabs button.selected{color:#174d69;border-color:#58a9ba}
 .verification-form label{font-size:13px;font-weight:750;color:#29425e;display:grid;gap:9px}
 .verification-form textarea{min-height:220px;border:1px solid #ccd8e5;border-radius:9px;resize:vertical;padding:13px;line-height:1.55;color:#182e45}
-.fixture-hint{display:flex;gap:12px;background:#eef7f8;border-left:3px solid #63b9c4;margin:18px 0;padding:11px 13px;color:#345469;font-size:12px;line-height:1.5}
-.fixture-hint b{color:#1c5a65;white-space:nowrap}
+.verification-status-message{margin-block:16px}
 .form-note{margin:14px 0 0;color:#6e7c8e;font-size:12px;line-height:1.45}
 .report-page{max-width:1120px}
 .report-actions{display:flex;justify-content:space-between;align-items:center;min-height:30px}
@@ -228,7 +227,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .history-tools{flex-wrap:wrap}
 .history-tools select{width:100%}
 .history-tools input{flex:1 0 100%}
-.fixture-hint{display:grid}
 .claim-card{padding:17px}
 .claim-card h3{font-size:21px}
 .public-report{padding:0 18px 30px}
