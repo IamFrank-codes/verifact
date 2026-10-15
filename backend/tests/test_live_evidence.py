@@ -94,3 +94,9 @@ def test_structured_assessment_requires_and_returns_source_bounded_news_summary(
     schema = captured['payload']['response_format']['json_schema']['schema']
     assert 'news_summary' in schema['required']
     assert 'news_summary' in schema['properties']
+
+
+def test_analysis_provider_label_identifies_groq(monkeypatch):
+    monkeypatch.setattr(verification.settings, 'openai_base_url', 'https://api.groq.com/openai/v1')
+
+    assert verification.analysis_provider_name() == 'Groq structured evidence analysis'

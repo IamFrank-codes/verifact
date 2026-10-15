@@ -36,6 +36,18 @@ VERIFACT_LOCAL_REAL_API_MODE=true
 
 Then add only the credentials you have, for example `VERIFACT_OPENAI_API_KEY`, `VERIFACT_GOOGLE_FACTCHECK_KEY`, `VERIFACT_NEWSAPI_KEY`, and the `VERIFACT_SMTP_*` values. Do not send keys in chat, place them in frontend code, commit them, or use them in screenshots.
 
+### Groq model configuration for the academic demo
+
+The academic-demo template uses Groq's OpenAI-compatible Chat Completions API. Create a Groq API key in the Groq Console, then place it only in the ignored local `backend/.env` file. Keep the existing `VERIFACT_OPENAI_API_KEY` variable name: VeriFact uses it as the credential for any OpenAI-compatible endpoint, not as a requirement to use OpenAI.
+
+```dotenv
+VERIFACT_OPENAI_API_KEY=YOUR_GROQ_API_KEY
+VERIFACT_OPENAI_BASE_URL=https://api.groq.com/openai/v1
+VERIFACT_OPENAI_MODEL=openai/gpt-oss-20b
+```
+
+The model ID above supports Groq strict JSON-schema output, which VeriFact requires to validate evidence IDs. See Groq's [OpenAI compatibility guide](https://console.groq.com/docs/openai) and [structured-output model list](https://console.groq.com/docs/structured-outputs). After changing the environment file, restart the backend and run a **new** verification. The model summarizes only retained source excerpts; it cannot produce a summary when every evidence provider returns no records. Provider failures and empty evidence remain visible in the report instead of being replaced by fixture data.
+
 Start hybrid mode with the override file:
 
 ```bash

@@ -15,6 +15,10 @@ logger = logging.getLogger('verifact.verification')
 VERDICT_VALUES = {'Supported by Available Evidence': 1.0, 'Mostly Supported': 0.78, 'Mixed or Potentially Misleading': 0.48, 'Contradicted by Available Evidence': 0.05}
 QUALITY_VALUES = {'High': 0.95, 'Medium': 0.72, 'Low': 0.4, 'Unknown': 0.35}
 
+def analysis_provider_name() -> str:
+    base_url = (settings.openai_base_url or '').lower()
+    return 'Groq structured evidence analysis' if 'api.groq.com' in base_url else 'OpenAI-compatible evidence analysis'
+
 def provider_failure_message(provider_name: str, exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         status_code = exc.response.status_code
@@ -118,13 +122,13 @@ def run_verification(db: Session, verification_id: str):
                 analyzed_claim.evidence_coverage = 'No retained evidence records; analysis and news summary skipped.'
                 message = 'No source evidence was retrieved; analysis and news summary were skipped.'
                 if not is_enabled():
-                    message += ' No OpenAI-compatible model key is configured.'
-                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message=message))
+                    message += ' No compatible model-provider API key is configured.'
+                db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message=message))
             elif not is_enabled():
                 analyzed_claim.verdict = 'Insufficient Evidence'
-                analyzed_claim.explanation = 'VeriFact retained source records, but no OpenAI-compatible model is configured to assess them.'
+                analyzed_claim.explanation = 'VeriFact retained source records, but no compatible model-provider API key is configured to assess them.'
                 analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); analysis and news summary unavailable.'
-                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message='Evidence was retrieved, but no OpenAI-compatible model key is configured to assess and summarize it.'))
+                db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message='Evidence was retrieved, but no compatible model-provider API key is configured to assess and summarize it.'))
             else:
                 assessment = analyze_evidence(analyzed_claim.text, packet)
                 if assessment:
@@ -141,12 +145,12 @@ def run_verification(db: Session, verification_id: str):
                             evidence.relationship_type = 'contradicting'
                         else:
                             evidence.relationship_type = 'contextual'
-                    db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='success', message='Structured assessment and source-bounded news summary accepted with validated retained-evidence IDs.'))
+                    db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='success', message='Structured assessment and source-bounded news summary accepted with validated retained-evidence IDs.'))
                 else:
                     analyzed_claim.verdict = 'Insufficient Evidence'
                     analyzed_claim.explanation = 'VeriFact retained evidence but could not obtain a valid structured analysis that cited only those records. No conclusion or score was produced.'
                     analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); structured analysis unavailable or invalid.'
-                    db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message='The model response was invalid or did not cite only retained evidence; no assessment or news summary was accepted.'))
+                    db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message='The model response was invalid or did not cite only retained evidence; no assessment or news summary was accepted.'))
             db.commit()
         set_stage(db, verification, 'Assessing evidence coverage')
         verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source), joinedload(Verification.article)).filter(Verification.id == verification_id).first()
