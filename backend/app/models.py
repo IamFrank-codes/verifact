@@ -18,12 +18,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(512))
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    verifications: Mapped[list['Verification']] = relationship(back_populates='user', cascade='all, delete-orphan')
+    verifications: Mapped[list['Verification']] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
 
 class PasswordResetToken(Base):
     __tablename__ = 'password_reset_tokens'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), index=True)
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -32,7 +32,7 @@ class PasswordResetToken(Base):
 class EmailVerificationToken(Base):
     __tablename__ = 'email_verification_tokens'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), index=True)
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -53,7 +53,7 @@ class Article(Base):
 class Verification(Base):
     __tablename__ = 'verifications'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), index=True)
     article_id: Mapped[str | None] = mapped_column(ForeignKey('articles.id'), nullable=True)
     input_type: Mapped[str] = mapped_column(String(20))
     original_input: Mapped[str] = mapped_column(Text)
@@ -73,14 +73,14 @@ class Verification(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user: Mapped['User'] = relationship(back_populates='verifications')
     article: Mapped['Article | None'] = relationship()
-    claims: Mapped[list['Claim']] = relationship(back_populates='verification', cascade='all, delete-orphan')
-    score_record: Mapped['VerificationScore | None'] = relationship(back_populates='verification', cascade='all, delete-orphan', uselist=False)
-    provider_runs: Mapped[list['ProviderRun']] = relationship(cascade='all, delete-orphan')
+    claims: Mapped[list['Claim']] = relationship(back_populates='verification', cascade='all, delete-orphan', passive_deletes=True)
+    score_record: Mapped['VerificationScore | None'] = relationship(back_populates='verification', cascade='all, delete-orphan', passive_deletes=True, uselist=False)
+    provider_runs: Mapped[list['ProviderRun']] = relationship(cascade='all, delete-orphan', passive_deletes=True)
 
 class Claim(Base):
     __tablename__ = 'claims'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id'), index=True)
+    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id', ondelete='CASCADE'), index=True)
     sequence: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
     claim_type: Mapped[str] = mapped_column(String(60), default='factual')
@@ -92,7 +92,7 @@ class Claim(Base):
     evidence_coverage: Mapped[str | None] = mapped_column(String(200), nullable=True)
     freshness_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification: Mapped['Verification'] = relationship(back_populates='claims')
-    evidence: Mapped[list['Evidence']] = relationship(back_populates='claim', cascade='all, delete-orphan')
+    evidence: Mapped[list['Evidence']] = relationship(back_populates='claim', cascade='all, delete-orphan', passive_deletes=True)
 
 class Source(Base):
     __tablename__ = 'sources'
@@ -109,7 +109,7 @@ class Source(Base):
 class Evidence(Base):
     __tablename__ = 'evidence'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    claim_id: Mapped[str] = mapped_column(ForeignKey('claims.id'), index=True)
+    claim_id: Mapped[str] = mapped_column(ForeignKey('claims.id', ondelete='CASCADE'), index=True)
     source_id: Mapped[str] = mapped_column(ForeignKey('sources.id'))
     relationship_type: Mapped[str] = mapped_column(String(30), default='contextual')
     excerpt: Mapped[str] = mapped_column(Text)
@@ -124,7 +124,7 @@ class Evidence(Base):
 class VerificationScore(Base):
     __tablename__ = 'verification_scores'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id'), unique=True)
+    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id', ondelete='CASCADE'), unique=True)
     eligible: Mapped[bool] = mapped_column(Boolean)
     eligibility_reason: Mapped[str] = mapped_column(Text)
     formula_version: Mapped[str] = mapped_column(String(50), default='1.0.0')
@@ -134,7 +134,7 @@ class VerificationScore(Base):
 class ProviderRun(Base):
     __tablename__ = 'provider_runs'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id'), index=True)
+    verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id', ondelete='CASCADE'), index=True)
     provider: Mapped[str] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(30))
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
