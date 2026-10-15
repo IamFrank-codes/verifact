@@ -35,6 +35,8 @@ def send_password_reset_email(recipient: str, reset_token: str) -> None:
         'VeriFact — Verify. Understand. Trust.\n\n'
         'A password reset was requested for your VeriFact account. Open this link to set a new password:\n\n'
         f'{reset_url}\n\n'
+        'If you prefer to enter the reset code manually, use this one-time code on the password reset screen:\n\n'
+        f'{reset_token}\n\n'
         'This link expires in 30 minutes and can be used once. If you did not request it, you can ignore this email.',
     )
 

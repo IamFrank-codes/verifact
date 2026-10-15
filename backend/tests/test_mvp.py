@@ -4,6 +4,7 @@ os.environ['VERIFACT_MODE'] = 'local-fixture'
 from fastapi.testclient import TestClient
 from app.main import app
 import app.main as main_module
+from app.services import email as email_service
 from app.db import Base, engine
 
 client = TestClient(app)
@@ -77,3 +78,13 @@ def test_forgot_password_sends_email_and_reset_token_is_single_use(monkeypatch):
     assert login.status_code == 200
     reused = client.post('/api/v1/auth/reset-password', json={'token': token, 'password': 'AnotherPass2026', 'confirm_password': 'AnotherPass2026'})
     assert reused.status_code == 400
+
+def test_reset_email_contains_link_and_manual_code(monkeypatch):
+    sent = []
+    monkeypatch.setattr(email_service, '_send_email', lambda recipient, subject, body: sent.append((recipient, subject, body)))
+    email_service.send_password_reset_email('person@example.com', 'one-time-reset-code')
+    recipient, subject, body = sent[0]
+    assert recipient == 'person@example.com'
+    assert subject == 'Reset your VeriFact password'
+    assert '/reset?token=one-time-reset-code' in body
+    assert 'one-time-reset-code' in body
