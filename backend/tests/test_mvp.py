@@ -3,6 +3,7 @@ os.environ['VERIFACT_DATABASE_URL'] = 'sqlite:///./test_verifact.db'
 os.environ['VERIFACT_MODE'] = 'local-fixture'
 from fastapi.testclient import TestClient
 from app.main import app
+import app.main as main_module
 from app.db import Base, engine
 
 client = TestClient(app)
@@ -54,3 +55,25 @@ def test_password_reset_then_login():
     assert reset.status_code == 200
     login = client.post('/api/v1/auth/login', json={'email': reset_email, 'password': 'RenewedPass2026'})
     assert login.status_code == 200
+
+def test_forgot_password_sends_email_and_reset_token_is_single_use(monkeypatch):
+    email = 'email-reset@example.com'
+    auth_client(email)
+    sent = []
+    monkeypatch.setattr(main_module.settings, 'mode', 'production')
+    monkeypatch.setattr(main_module, 'send_password_reset_email', lambda recipient, token: sent.append((recipient, token)))
+
+    requested = client.post('/api/v1/auth/forgot-password', json={'email': email})
+    assert requested.status_code == 200
+    assert requested.json()['message'] == 'If an account exists for that email, VeriFact has sent reset instructions.'
+    assert 'development_reset_token' not in requested.json()
+    assert len(sent) == 1
+    assert sent[0][0] == email
+
+    token = sent[0][1]
+    reset = client.post('/api/v1/auth/reset-password', json={'token': token, 'password': 'ChangedPass2026', 'confirm_password': 'ChangedPass2026'})
+    assert reset.status_code == 200
+    login = client.post('/api/v1/auth/login', json={'email': email, 'password': 'ChangedPass2026'})
+    assert login.status_code == 200
+    reused = client.post('/api/v1/auth/reset-password', json={'token': token, 'password': 'AnotherPass2026', 'confirm_password': 'AnotherPass2026'})
+    assert reused.status_code == 400

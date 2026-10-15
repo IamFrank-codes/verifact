@@ -31,6 +31,13 @@ class ResetPasswordInput(BaseModel):
     password: str = Field(min_length=10, max_length=128)
     confirm_password: str
 
+    @field_validator('password')
+    @classmethod
+    def strong_password(cls, value: str):
+        if not any(c.isupper() for c in value) or not any(c.islower() for c in value) or not any(c.isdigit() for c in value):
+            raise ValueError('Password must include upper-case, lower-case, and numeric characters.')
+        return value
+
 class VerificationInput(BaseModel):
     input_type: Literal['text', 'url', 'claim']
     content: str = Field(min_length=3, max_length=24000)

@@ -233,8 +233,11 @@ def forgot_password(request: Request, payload: ForgotPasswordInput, db: Session 
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     dev_token = None
     if user:
+        issued_at = datetime.now(timezone.utc)
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None)).update({PasswordResetToken.used_at: issued_at}, synchronize_session=False)
         raw, hashed = new_reset_token()
-        db.add(PasswordResetToken(user_id=user.id, token_hash=hashed, expires_at=datetime.now(timezone.utc) + timedelta(minutes=30)))
+        reset_record = PasswordResetToken(user_id=user.id, token_hash=hashed, expires_at=issued_at + timedelta(minutes=30))
+        db.add(reset_record)
         db.commit()
         if settings.mode == 'local-fixture':
             dev_token = raw
@@ -243,6 +246,8 @@ def forgot_password(request: Request, payload: ForgotPasswordInput, db: Session 
                 send_password_reset_email(user.email, raw)
             except Exception as exc:
                 logger.exception('Password-reset email delivery failed')
+                db.delete(reset_record)
+                db.commit()
                 raise HTTPException(status_code=503, detail='VeriFact could not send the password-reset email. Check the SMTP configuration.') from exc
     result = {'message': 'If an account exists for that email, VeriFact has sent reset instructions.'}
     if dev_token:
@@ -260,7 +265,11 @@ def reset_password(request: Request, payload: ResetPasswordInput, db: Session = 
     if not record or not expires_at or expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail='This reset link is invalid or has expired.')
     user = db.get(User, record.user_id)
-    user.password_hash = hash_password(payload.password); record.used_at = datetime.now(timezone.utc); db.commit()
+    user.password_hash = hash_password(payload.password)
+    now = datetime.now(timezone.utc)
+    record.used_at = now
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None)).update({PasswordResetToken.used_at: now}, synchronize_session=False)
+    db.commit()
     return {'message': 'Password updated. You can now sign in to VeriFact.'}
 
 
