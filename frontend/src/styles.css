@@ -47,6 +47,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .form-stack input:focus,.history-tools input:focus,.history-tools select:focus{border-color:#4d96ac;outline:none;box-shadow:0 0 0 3px #d6edf1}
 .form-stack small{font-weight:500;color:#6c7a8d}
 .auth-links{display:flex;justify-content:space-between;gap:15px;margin-top:23px;font-size:13px;color:#607087}
+.auth-content>.form-stack+.notice.success{margin-top:15px}
 .topbar{height:70px;background:#fff;border-bottom:1px solid #dbe4ec;display:flex;align-items:center;padding:0 clamp(20px,5vw,78px);gap:40px;position:sticky;top:0;z-index:10}
 .brand-button{border:0;background:transparent;padding:0}
 .topbar nav{display:flex;gap:23px;flex:1}
