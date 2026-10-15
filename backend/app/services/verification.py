@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import logging
+import httpx
 from sqlalchemy.orm import Session, joinedload
 from app.models import Article, Claim, Evidence, ProviderRun, Source, Verification, VerificationScore
 from app.core.config import get_settings
@@ -9,8 +11,21 @@ from app.services.extraction import extract_article, ExtractionError
 from app.ai.structured import analyze_evidence, is_enabled
 
 settings = get_settings()
+logger = logging.getLogger('verifact.verification')
 VERDICT_VALUES = {'Supported by Available Evidence': 1.0, 'Mostly Supported': 0.78, 'Mixed or Potentially Misleading': 0.48, 'Contradicted by Available Evidence': 0.05}
 QUALITY_VALUES = {'High': 0.95, 'Medium': 0.72, 'Low': 0.4, 'Unknown': 0.35}
+
+def provider_failure_message(provider_name: str, exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        if status_code == 429:
+            return f'{provider_name} rate-limited this request (HTTP 429). No provider result was retained as evidence; retry later or use another configured source.'
+        return f'{provider_name} returned HTTP {status_code}. No provider result was retained as evidence.'
+    if isinstance(exc, httpx.TimeoutException):
+        return f'{provider_name} request timed out. No provider result was retained as evidence; retry later or use another configured source.'
+    if isinstance(exc, httpx.RequestError):
+        return f'{provider_name} could not be reached. No provider result was retained as evidence.'
+    return f'{provider_name} request failed. No provider result was retained as evidence.'
 
 def set_stage(db: Session, verification: Verification, stage: str, status: str = 'processing'):
     verification.stage, verification.status = stage, status
@@ -60,6 +75,7 @@ def run_verification(db: Session, verification_id: str):
     verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source), joinedload(Verification.article)).filter(Verification.id == verification_id).first()
     if not verification or verification.status not in {'queued', 'processing'}:
         return
+    news_summary = None
     try:
         set_stage(db, verification, 'Processing input')
         content = verification.original_input
@@ -86,43 +102,71 @@ def run_verification(db: Session, verification_id: str):
         for provider in providers:
             try:
                 found = provider.search(claim.text); items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned.'))
-            except Exception:
-                db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message='Provider request failed. No provider result was retained as evidence.'))
+            except Exception as exc:
+                logger.warning('Evidence provider %s failed (%s)', provider.name, type(exc).__name__)
+                db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message=provider_failure_message(provider.name, exc)))
         for item in items:
             create_evidence(db, claim, item, fixture=bool(use_fixture and item.provider == 'VeriFact local fixture'))
         db.commit()
-        if settings.live_provider_mode and is_enabled():
+        if settings.live_provider_mode:
             verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source)).filter(Verification.id == verification_id).first()
             analyzed_claim = verification.claims[0]
             packet = [{'id': evidence.id, 'source': evidence.source.name, 'url': evidence.source.canonical_url, 'source_type': evidence.source.source_type, 'quality_class': evidence.source.quality_class, 'published_at': evidence.published_at, 'excerpt': evidence.excerpt} for evidence in analyzed_claim.evidence]
-            assessment = analyze_evidence(analyzed_claim.text, packet)
-            if assessment:
-                analyzed_claim.verdict = assessment.verdict
-                analyzed_claim.explanation = assessment.explanation
-                analyzed_claim.freshness_note = assessment.freshness_note
-                referenced = set(assessment.supporting_ids + assessment.contradicting_ids + assessment.contextual_ids)
-                analyzed_claim.evidence_coverage = f'{len(referenced)} model-referenced record(s) from {len(packet)} retained evidence record(s).'
-                for evidence in analyzed_claim.evidence:
-                    if evidence.id in assessment.supporting_ids:
-                        evidence.relationship_type = 'supporting'
-                    elif evidence.id in assessment.contradicting_ids:
-                        evidence.relationship_type = 'contradicting'
-                    else:
-                        evidence.relationship_type = 'contextual'
-                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='success', message='Structured analysis accepted with validated retained-evidence IDs.'))
-            else:
+            if not packet:
                 analyzed_claim.verdict = 'Insufficient Evidence'
-                analyzed_claim.explanation = 'VeriFact retained evidence but could not obtain a valid structured analysis that cited only those records. No conclusion or score was produced.'
-                analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); structured analysis unavailable or invalid.'
-                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message='No valid evidence-ID-bounded structured response was accepted.'))
+                analyzed_claim.explanation = 'No related source records were retrieved, so VeriFact could not assess the claim against external evidence.'
+                analyzed_claim.evidence_coverage = 'No retained evidence records; analysis and news summary skipped.'
+                message = 'No source evidence was retrieved; analysis and news summary were skipped.'
+                if not is_enabled():
+                    message += ' No OpenAI-compatible model key is configured.'
+                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message=message))
+            elif not is_enabled():
+                analyzed_claim.verdict = 'Insufficient Evidence'
+                analyzed_claim.explanation = 'VeriFact retained source records, but no OpenAI-compatible model is configured to assess them.'
+                analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); analysis and news summary unavailable.'
+                db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message='Evidence was retrieved, but no OpenAI-compatible model key is configured to assess and summarize it.'))
+            else:
+                assessment = analyze_evidence(analyzed_claim.text, packet)
+                if assessment:
+                    news_summary = assessment.news_summary
+                    analyzed_claim.verdict = assessment.verdict
+                    analyzed_claim.explanation = assessment.explanation
+                    analyzed_claim.freshness_note = assessment.freshness_note
+                    referenced = set(assessment.supporting_ids + assessment.contradicting_ids + assessment.contextual_ids)
+                    analyzed_claim.evidence_coverage = f'{len(referenced)} model-referenced record(s) from {len(packet)} retained evidence record(s).'
+                    for evidence in analyzed_claim.evidence:
+                        if evidence.id in assessment.supporting_ids:
+                            evidence.relationship_type = 'supporting'
+                        elif evidence.id in assessment.contradicting_ids:
+                            evidence.relationship_type = 'contradicting'
+                        else:
+                            evidence.relationship_type = 'contextual'
+                    db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='success', message='Structured assessment and source-bounded news summary accepted with validated retained-evidence IDs.'))
+                else:
+                    analyzed_claim.verdict = 'Insufficient Evidence'
+                    analyzed_claim.explanation = 'VeriFact retained evidence but could not obtain a valid structured analysis that cited only those records. No conclusion or score was produced.'
+                    analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); structured analysis unavailable or invalid.'
+                    db.add(ProviderRun(verification_id=verification.id, provider='OpenAI-compatible evidence analysis', status='unavailable', message='The model response was invalid or did not cite only retained evidence; no assessment or news summary was accepted.'))
             db.commit()
         set_stage(db, verification, 'Assessing evidence coverage')
         verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source), joinedload(Verification.article)).filter(Verification.id == verification_id).first()
         score_verification(db, verification)
         if verification.score is None:
-            verification.summary = 'VeriFact found insufficient retained evidence to produce an overall score. This is not a finding that the submitted claim is true or false.'
+            score_summary = 'VeriFact found insufficient retained evidence to produce an overall score. This is not a finding that the submitted claim is true or false.'
         else:
-            verification.summary = f'VeriFact produced an evidence-dependent score from {verification.coverage_pct:.0f}% weighted claim coverage. Review the cited records and policy context before drawing conclusions.'
+            score_summary = f'VeriFact produced an evidence-dependent score from {verification.coverage_pct:.0f}% weighted claim coverage. Review the cited records and policy context before drawing conclusions.'
+        if news_summary:
+            verification.summary = f'Related news summary:\n{news_summary}\n\n{score_summary}'
+        elif settings.live_provider_mode:
+            if not items:
+                reason = 'Related news summary unavailable: no source records were retrieved.'
+            elif not is_enabled():
+                reason = 'Related news summary unavailable: source records were retained, but no OpenAI-compatible model is configured.'
+            else:
+                reason = 'Related news summary unavailable: the model did not return a valid evidence-bounded summary.'
+            verification.summary = f'{reason}\n\n{score_summary}'
+        else:
+            verification.summary = score_summary
         verification.stage, verification.status, verification.completed_at = 'Report ready', 'completed', datetime.now(timezone.utc)
         db.commit()
     except ExtractionError as exc:

@@ -120,7 +120,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .score-card .verified-date{position:absolute;right:28px;bottom:13px;font-size:11px;color:#6d8290}
 .no-score{max-width:680px}
 .report-summary{margin:23px 0;background:#fff;border:1px solid #dbe5ed;border-radius:12px;padding:24px;display:grid;grid-template-columns:290px 1fr;gap:30px}
-.report-summary>p{margin:0;color:#52677d;line-height:1.7;font-size:14px}
+.report-summary>p{margin:0;color:#52677d;line-height:1.7;font-size:14px;white-space:pre-line}
 .score-method{grid-column:1/-1;border-top:1px solid #e5edf2;padding-top:14px;color:#52677d;font-size:13px;line-height:1.6}
 .score-method summary{color:#23526b;font-weight:800;cursor:pointer}
 .components{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}

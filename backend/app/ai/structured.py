@@ -17,6 +17,7 @@ Verdict = Literal[
 class EvidenceAssessment(BaseModel):
     verdict: Verdict
     explanation: str = Field(min_length=1, max_length=1600)
+    news_summary: str = Field(min_length=1, max_length=1200)
     supporting_ids: list[str]
     contradicting_ids: list[str]
     contextual_ids: list[str]
@@ -43,17 +44,19 @@ def analyze_evidence(claim_text: str, evidence_packet: list[dict]) -> EvidenceAs
         'properties': {
             'verdict': {'type': 'string', 'enum': ['Supported by Available Evidence', 'Mostly Supported', 'Mixed or Potentially Misleading', 'Contradicted by Available Evidence', 'Insufficient Evidence']},
             'explanation': {'type': 'string'},
+            'news_summary': {'type': 'string'},
             'supporting_ids': {'type': 'array', 'items': {'type': 'string'}},
             'contradicting_ids': {'type': 'array', 'items': {'type': 'string'}},
             'contextual_ids': {'type': 'array', 'items': {'type': 'string'}},
             'freshness_note': {'type': 'string'},
         },
-        'required': ['verdict', 'explanation', 'supporting_ids', 'contradicting_ids', 'contextual_ids', 'freshness_note'],
+        'required': ['verdict', 'explanation', 'news_summary', 'supporting_ids', 'contradicting_ids', 'contextual_ids', 'freshness_note'],
         'additionalProperties': False,
     }
     instructions = (
         'You are the evidence-analysis component of VeriFact. Assess the claim only against the supplied evidence packet. '
         'Do not use background knowledge. Do not create evidence, quotations, links, source-quality labels, or IDs. '
+        'Write news_summary as 1-3 sentences summarizing only what the supplied excerpts report. If an excerpt contains only a headline, say the summary is headline-only; do not infer details that are not present. Mention material disagreement between sources. '
         'Use Insufficient Evidence if the packet cannot establish a bounded assessment. '
         'A verdict is an evidence assessment, never a declaration of absolute truth. '
         'Return only the requested JSON schema.'

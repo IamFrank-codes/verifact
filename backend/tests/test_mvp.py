@@ -4,7 +4,10 @@ os.environ['VERIFACT_MODE'] = 'local-fixture'
 from fastapi.testclient import TestClient
 from app.main import app
 import app.main as main_module
+from app.ai.structured import EvidenceAssessment
+from app.evidence.providers import EvidenceItem
 from app.services import email as email_service
+from app.services import verification as verification_service
 from app.db import Base, engine
 
 client = TestClient(app)
@@ -88,3 +91,64 @@ def test_reset_email_contains_link_and_manual_code(monkeypatch):
     assert subject == 'Reset your VeriFact password'
     assert '/reset?token=one-time-reset-code' in body
     assert 'one-time-reset-code' in body
+
+
+def test_live_verification_explains_when_no_sources_are_found(monkeypatch):
+    auth_client('no-source@example.com')
+    for settings in (main_module.settings, verification_service.settings):
+        monkeypatch.setattr(settings, 'mode', 'hybrid')
+        monkeypatch.setattr(settings, 'local_real_api_mode', True)
+        monkeypatch.setattr(settings, 'inline_processing', True)
+
+    class EmptyProvider:
+        name = 'Test news provider'
+
+        def search(self, claim):
+            return []
+
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: [EmptyProvider()])
+    monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
+    monkeypatch.setattr(verification_service, 'analyze_evidence', lambda *args: (_ for _ in ()).throw(AssertionError('Analysis must be skipped when no evidence exists.')))
+
+    response = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A claim with no matching source records.'})
+    assert response.status_code == 202
+    report = response.json()['report']
+    assert report['claims'][0]['evidence'] == []
+    assert report['summary'].startswith('Related news summary unavailable: no source records were retrieved.')
+    analysis_run = next(item for item in report['provider_runs'] if item['provider'] == 'OpenAI-compatible evidence analysis')
+    assert analysis_run['status'] == 'unavailable'
+    assert analysis_run['message'] == 'No source evidence was retrieved; analysis and news summary were skipped.'
+
+
+def test_live_report_includes_retained_source_and_model_news_summary(monkeypatch):
+    auth_client('news-summary@example.com')
+    for settings in (main_module.settings, verification_service.settings):
+        monkeypatch.setattr(settings, 'mode', 'hybrid')
+        monkeypatch.setattr(settings, 'local_real_api_mode', True)
+        monkeypatch.setattr(settings, 'inline_processing', True)
+
+    class OneSourceProvider:
+        name = 'Test news provider'
+
+        def search(self, claim):
+            return [EvidenceItem('Example News: article title', 'https://news.example/article', '2026-10-15', 'Article excerpt with directly relevant reporting.', 'contextual', 'Test source match.', self.name)]
+
+    assessment = EvidenceAssessment(
+        verdict='Insufficient Evidence',
+        explanation='This single source is not enough to assess the claim.',
+        news_summary='The retrieved source reports relevant context but does not establish the claim on its own.',
+        supporting_ids=[],
+        contradicting_ids=[],
+        contextual_ids=[],
+        freshness_note='The source was published recently.',
+    )
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: [OneSourceProvider()])
+    monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
+    monkeypatch.setattr(verification_service, 'analyze_evidence', lambda *args: assessment)
+
+    response = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A claim supported by one related article.'})
+    assert response.status_code == 202
+    report = response.json()['report']
+    assert report['summary'].startswith('Related news summary:\nThe retrieved source reports relevant context')
+    assert report['claims'][0]['evidence'][0]['source']['url'] == 'https://news.example/article'
+    assert report['claims'][0]['evidence'][0]['excerpt'] == 'Article excerpt with directly relevant reporting.'
