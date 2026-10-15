@@ -94,6 +94,28 @@ def test_structured_assessment_requires_and_returns_source_bounded_news_summary(
     schema = captured['payload']['response_format']['json_schema']['schema']
     assert 'news_summary' in schema['required']
     assert 'news_summary' in schema['properties']
+    assert '2-5 sentences' in captured['payload']['messages'][0]['content']
+
+
+def test_structured_model_rate_limit_has_safe_diagnostic(monkeypatch):
+    monkeypatch.setattr(structured.settings, 'openai_api_key', 'test-key')
+    request = httpx.Request('POST', 'https://api.groq.com/openai/v1/chat/completions')
+    response = httpx.Response(429, request=request)
+    response_error = httpx.HTTPStatusError('rate limited', request=request, response=response)
+    mocked_response = Mock()
+    mocked_response.raise_for_status.side_effect = response_error
+    monkeypatch.setattr(structured.httpx, 'post', lambda *args, **kwargs: mocked_response)
+
+    try:
+        structured.analyze_evidence('A factual claim', [{'id': 'evidence-1', 'excerpt': 'An article excerpt.'}])
+    except structured.EvidenceAnalysisError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError('Expected a safe model-provider error')
+
+    assert 'HTTP 429' in message
+    assert 'quota' in message
+    assert 'test-key' not in message
 
 
 def test_analysis_provider_label_identifies_groq(monkeypatch):

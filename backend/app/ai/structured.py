@@ -34,6 +34,8 @@ def _endpoint() -> str:
         base += '/v1'
     return base + '/chat/completions'
 
+class EvidenceAnalysisError(Exception):
+    """Safe, user-facing diagnosis for an analysis response that cannot be used."""
 
 def analyze_evidence(claim_text: str, evidence_packet: list[dict]) -> EvidenceAssessment | None:
     """Assess only source records supplied by VeriFact; never permits model-created citations."""
@@ -56,7 +58,7 @@ def analyze_evidence(claim_text: str, evidence_packet: list[dict]) -> EvidenceAs
     instructions = (
         'You are the evidence-analysis component of VeriFact. Assess the claim only against the supplied evidence packet. '
         'Do not use background knowledge. Do not create evidence, quotations, links, source-quality labels, or IDs. '
-        'Write news_summary as 1-3 sentences summarizing only what the supplied excerpts report. If an excerpt contains only a headline, say the summary is headline-only; do not infer details that are not present. Mention material disagreement between sources. '
+        'Write news_summary as 2-5 sentences summarizing only what the supplied excerpts report. If the excerpts are too thin to support two sentences, state that limitation rather than padding or inventing details. If an excerpt contains only a headline, say the summary is headline-only. Mention material disagreement between sources. '
         'Use Insufficient Evidence if the packet cannot establish a bounded assessment. '
         'A verdict is an evidence assessment, never a declaration of absolute truth. '
         'Return only the requested JSON schema.'
@@ -75,12 +77,27 @@ def analyze_evidence(claim_text: str, evidence_packet: list[dict]) -> EvidenceAs
         response.raise_for_status()
         content = response.json()['choices'][0]['message']['content']
         assessment = EvidenceAssessment.model_validate_json(content)
-    except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError):
-        return None
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code in {401, 403}:
+            message = f'The configured model provider rejected the API key (HTTP {status_code}); check the backend key and endpoint configuration.'
+        elif status_code == 429:
+            message = 'The configured model provider rate-limited the request (HTTP 429); check the account quota and retry later.'
+        elif status_code in {400, 404}:
+            message = f'The configured model provider rejected the request (HTTP {status_code}); check the model ID and strict JSON-schema support.'
+        else:
+            message = f'The configured model provider returned HTTP {status_code}; no assessment or summary was accepted.'
+        raise EvidenceAnalysisError(message) from None
+    except httpx.TimeoutException:
+        raise EvidenceAnalysisError('The configured model provider timed out; no assessment or summary was accepted.') from None
+    except httpx.RequestError:
+        raise EvidenceAnalysisError('The configured model provider could not be reached; no assessment or summary was accepted.') from None
+    except (KeyError, TypeError, ValueError, ValidationError):
+        raise EvidenceAnalysisError('The model response was not valid for VeriFact’s structured schema; no assessment or summary was accepted.') from None
     allowed_ids = {str(item['id']) for item in evidence_packet}
     returned_ids = set(assessment.supporting_ids + assessment.contradicting_ids + assessment.contextual_ids)
     if not returned_ids.issubset(allowed_ids):
-        return None
+        raise EvidenceAnalysisError('The model cited evidence IDs outside the retained source packet; the assessment was rejected.')
     if assessment.verdict != 'Insufficient Evidence' and not returned_ids:
-        return None
+        raise EvidenceAnalysisError('The model returned a verdict without citing retained evidence; the assessment was rejected.')
     return assessment

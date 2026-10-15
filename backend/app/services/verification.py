@@ -8,7 +8,7 @@ from app.evidence.source_policy import policy
 from app.evidence.providers import enabled_external_providers, EvidenceItem
 from app.fixtures.deterministic import find_fixture, generic_claim
 from app.services.extraction import extract_article, ExtractionError
-from app.ai.structured import analyze_evidence, is_enabled
+from app.ai.structured import analyze_evidence, is_enabled, EvidenceAnalysisError
 
 settings = get_settings()
 logger = logging.getLogger('verifact.verification')
@@ -80,6 +80,7 @@ def run_verification(db: Session, verification_id: str):
     if not verification or verification.status not in {'queued', 'processing'}:
         return
     news_summary = None
+    analysis_error = None
     try:
         set_stage(db, verification, 'Processing input')
         content = verification.original_input
@@ -130,7 +131,11 @@ def run_verification(db: Session, verification_id: str):
                 analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); analysis and news summary unavailable.'
                 db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message='Evidence was retrieved, but no compatible model-provider API key is configured to assess and summarize it.'))
             else:
-                assessment = analyze_evidence(analyzed_claim.text, packet)
+                try:
+                    assessment = analyze_evidence(analyzed_claim.text, packet)
+                except EvidenceAnalysisError as exc:
+                    assessment = None
+                    analysis_error = str(exc)
                 if assessment:
                     news_summary = assessment.news_summary
                     analyzed_claim.verdict = assessment.verdict
@@ -147,10 +152,11 @@ def run_verification(db: Session, verification_id: str):
                             evidence.relationship_type = 'contextual'
                     db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='success', message='Structured assessment and source-bounded news summary accepted with validated retained-evidence IDs.'))
                 else:
+                    analysis_error = analysis_error or 'The model response could not be accepted as a valid evidence-bounded assessment.'
                     analyzed_claim.verdict = 'Insufficient Evidence'
                     analyzed_claim.explanation = 'VeriFact retained evidence but could not obtain a valid structured analysis that cited only those records. No conclusion or score was produced.'
                     analyzed_claim.evidence_coverage = f'{len(packet)} retained evidence record(s); structured analysis unavailable or invalid.'
-                    db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message='The model response was invalid or did not cite only retained evidence; no assessment or news summary was accepted.'))
+                    db.add(ProviderRun(verification_id=verification.id, provider=analysis_provider_name(), status='unavailable', message=analysis_error))
             db.commit()
         set_stage(db, verification, 'Assessing evidence coverage')
         verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source), joinedload(Verification.article)).filter(Verification.id == verification_id).first()
@@ -165,7 +171,9 @@ def run_verification(db: Session, verification_id: str):
             if not items:
                 reason = 'Related news summary unavailable: no source records were retrieved.'
             elif not is_enabled():
-                reason = 'Related news summary unavailable: source records were retained, but no OpenAI-compatible model is configured.'
+                reason = 'Related news summary unavailable: source records were retained, but no compatible model-provider API key is configured.'
+            elif analysis_error:
+                reason = f'Related news summary unavailable: {analysis_error}'
             else:
                 reason = 'Related news summary unavailable: the model did not return a valid evidence-bounded summary.'
             verification.summary = f'{reason}\n\n{score_summary}'
