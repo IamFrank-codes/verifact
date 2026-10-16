@@ -96,8 +96,7 @@ def test_reset_email_contains_link_and_manual_code(monkeypatch):
 def test_live_verification_explains_when_no_sources_are_found(monkeypatch):
     auth_client('no-source@example.com')
     for settings in (main_module.settings, verification_service.settings):
-        monkeypatch.setattr(settings, 'mode', 'hybrid')
-        monkeypatch.setattr(settings, 'local_real_api_mode', True)
+        monkeypatch.setattr(settings, 'mode', 'academic-demo')
         monkeypatch.setattr(settings, 'inline_processing', True)
 
     class EmptyProvider:
@@ -123,8 +122,7 @@ def test_live_verification_explains_when_no_sources_are_found(monkeypatch):
 def test_live_report_includes_retained_source_and_model_news_summary(monkeypatch):
     auth_client('news-summary@example.com')
     for settings in (main_module.settings, verification_service.settings):
-        monkeypatch.setattr(settings, 'mode', 'hybrid')
-        monkeypatch.setattr(settings, 'local_real_api_mode', True)
+        monkeypatch.setattr(settings, 'mode', 'academic-demo')
         monkeypatch.setattr(settings, 'inline_processing', True)
 
     class OneSourceProvider:

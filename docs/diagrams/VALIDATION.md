@@ -1,13 +1,13 @@
-# Diagram validation record
+# Academic Demo diagram validation
 
-## Class diagram
+## Domain class diagram
 
-The rendered class diagram includes the exact implemented class names for the SQLAlchemy domain models: `User`, `PasswordResetToken`, `Article`, `Verification`, `Claim`, `Evidence`, `Source`, `VerificationScore`, and `ProviderRun`. It also includes the implemented configuration and service classes/protocols: `Settings`, `SourcePolicy`, `EvidenceItem`, `EvidenceProvider`, `GoogleFactCheckProvider`, `GDELTProvider`, `NewsAPIProvider`, and `EvidenceAssessment`.
+The diagram covers the account and report entities used by the Academic Demo: `User`, `PasswordResetToken`, `Article`, `Verification`, `Claim`, `Evidence`, `Source`, `VerificationScore`, and `ProviderRun`. It also shows the source policy, evidence-provider interface, configured evidence providers, and structured evidence assessment.
 
-The relationship cardinalities match the model relationships and foreign keys: a `User` owns `Verification` records and reset tokens; a `Verification` links to zero or one `Article`, multiple `Claim` and `ProviderRun` records, and zero or one `VerificationScore`; `Claim` records own `Evidence`; and each `Evidence` record references a `Source`.
+The relationship cardinalities match the application model: a user owns verifications and reset tokens; a verification may reference an article, contains claims and provider runs, and may have a score record; claims own evidence records; and each evidence record references a source.
 
-## Architecture diagram
+## Academic Demo architecture diagram
 
-The rendered architecture diagram shows the implemented React/Vite/Nginx client routes, FastAPI API components, RQ worker, PostgreSQL-or-local-SQLite persistence, Redis queue, fixture and source-policy assets, provider adapters, structured OpenAI-compatible analysis, SMTP email path, and Caddy production edge. It explicitly distinguishes local mock fixtures from hybrid local real-provider mode and production mode.
+The diagram follows the academic path: browser to Vite frontend to FastAPI; the API runs verification inline, calls configured evidence providers and Groq, and persists results to the configured application database. SMTP is shown only as an optional email integration.
 
-Both diagram images rendered successfully and remain readable at full resolution. Mermaid sources are retained beside their PNG renders for maintainable source-controlled documentation.
+The Mermaid source files are the maintainable source of truth for both rendered PNG diagrams. Regenerate the images using the commands in [README.md](README.md) after editing a diagram.

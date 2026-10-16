@@ -1,35 +1,29 @@
-# VeriFact security checklist
+# Academic Demo security notes
 
-VeriFact is designed to present evidence assessments, not declarations of truth. Production operators remain responsible for hosting, credential handling, provider contracts, access governance, and incident response.
+The Academic Demo is intended for controlled evaluation with non-sensitive, public claims. It sends claim text and retrieved source excerpts to whichever external providers are enabled in the backend environment.
 
-## Implemented application controls
+## Protect credentials and data
 
-| Area | Implemented control |
-|---|---|
-| Passwords | Argon2 password hashing through Passlib. |
-| Sessions | Signed, HttpOnly session cookie; production configuration requires `Secure=true`. |
-| Password reset | Random token hashed before persistence, expires after 30 minutes, and is single-use. The response is non-enumerating. |
-| Local vs production reset | Local fixture mode may expose a development token. Production uses SMTP delivery and never includes a reset token in the browser response. |
-| Authorization | Private verification routes filter by signed-in owner. Public routes require both a public identifier and explicit public visibility. |
-| Source policy | Source classes come from a configured policy, not an AI-generated trust label. |
-| Scoring integrity | Scores require evidence eligibility; insufficient evidence remains scoreless. |
-| URL extraction | The extractor blocks local/private targets, restricts public HTTP(S) URLs, limits content size, and fails closed on unsuitable pages. |
-| Request safety | API request size limits, rate limits on auth routes, trusted-host checks, narrow CORS origins, compression, and response security headers are enabled. |
-| Provider failures | Provider failures are logged/recorded as limitations and are never converted into evidence, proof, fixture data, or a score. |
+- Keep `backend/.env` private and restrict its file permissions.
+- Never commit, screenshot, or send API keys, database passwords, SMTP passwords, reset tokens, or session cookies.
+- Keep provider keys and the Supabase connection string on the backend; never add them to frontend variables or browser code.
+- Do not submit confidential, personal, health, financial, or otherwise sensitive text unless you have reviewed and accepted each configured provider's data handling terms.
+- Use the least-privileged credentials available and rotate any key that was exposed.
 
-## Required production configuration
+## Application protections
 
-Before public deployment, configure the following through `.env.production` on the host and never commit it:
+- Passwords are hashed with Argon2.
+- Session cookies are HttpOnly and signed by the application.
+- Password-reset tokens are stored as hashes, expire, and can be used once.
+- Private verification routes check the signed-in user's ownership; public reports require an explicit share action.
+- Source classes come from the configured policy, not an AI-generated trust label.
+- Scores require evidence eligibility; insufficient evidence remains scoreless.
+- URL extraction restricts targets and content size to reduce unsafe fetches.
+- Request limits, authentication rate limits, trusted-host checks, narrow CORS origins, and security headers are enabled.
+- Provider failures remain visible limitations and are never converted into sources, evidence, or a score.
 
-- A unique `VERIFACT_SECRET_KEY` with at least 32 characters.
-- HTTPS `VERIFACT_FRONTEND_ORIGIN` and `VERIFACT_PUBLIC_BASE_URL` values for the real domain.
-- An explicit `VERIFACT_ALLOWED_HOSTS` list and `VERIFACT_SECURE_COOKIES=true`.
-- PostgreSQL and Redis credentials, protected Docker volumes or managed equivalents, and off-host backups.
-- SMTP credentials and a verified production sender address.
-- Only the evidence-provider credentials you are authorized to use.
+## Before sharing a report
 
-## Pre-launch checks
+Review the submitted claim, retained excerpts, source links, and report visibility. Only enable public sharing when the report contains no information you do not intend to publish. A source summary is based on retained provider evidence and can be absent when retrieval or extraction fails.
 
-> Production is not ready merely because the containers start. Complete the user journey over HTTPS, including registration, login, real password-reset email delivery, a worker-processed verification, evidence-limitation behavior, public/private report isolation, backup creation, and a restore drill.
-
-The detailed operator procedure is in [deployment.md](deployment.md). Review proxy/firewall rules, provider retention terms, privacy notice, account deletion policy, and log retention before public launch.
+For setup and provider details, see [the Academic Demo guide](academic-demo.md). For score eligibility, see [Scoring and evidence](SCORING_AND_EVIDENCE.md).

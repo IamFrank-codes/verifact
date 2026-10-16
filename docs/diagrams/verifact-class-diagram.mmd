@@ -44,7 +44,6 @@ classDiagram
         +str policy_version
         +bool is_public
         +str public_id
-        +str mode
         +str error_message
         +datetime created_at
         +datetime completed_at
@@ -73,7 +72,6 @@ classDiagram
         +str published_at
         +datetime retrieved_at
         +str provider
-        +bool fixture
     }
     class Source {
         +str id
@@ -104,18 +102,15 @@ classDiagram
     }
 
     class Settings {
-        +str app_name
-        +str environment
-        +str mode
         +str database_url
-        +str redis_url
-        +str frontend_origin
-        +str public_base_url
-        +bool secure_cookies
-        +bool local_real_api_mode
-        +bool live_provider_mode
-        +list cors_origins
-        +list host_list
+        +str secret_key
+        +str openai_api_key
+        +str openai_base_url
+        +str openai_model
+        +str google_factcheck_key
+        +str newsapi_key
+        +bool gdelt_enabled
+        +bool inline_processing
     }
     class SourcePolicy {
         +dict data
@@ -151,6 +146,7 @@ classDiagram
     class EvidenceAssessment {
         +Verdict verdict
         +str explanation
+        +str news_summary
         +list~str~ supporting_ids
         +list~str~ contradicting_ids
         +list~str~ contextual_ids
@@ -171,8 +167,4 @@ classDiagram
     NewsAPIProvider ..|> EvidenceProvider
     EvidenceProvider ..> EvidenceItem : returns
     SourcePolicy ..> Source : classifies
-    Settings ..> SourcePolicy : source_policy_path
-    Settings ..> GoogleFactCheckProvider : google_factcheck_key
-    Settings ..> NewsAPIProvider : newsapi_key
-    Settings ..> GDELTProvider : gdelt_enabled
     EvidenceAssessment ..> Evidence : validates IDs against

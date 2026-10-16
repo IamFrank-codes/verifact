@@ -9,11 +9,9 @@ services:
       - ./backend/.env
     environment:
       VERIFACT_ENVIRONMENT: development
-      VERIFACT_MODE: hybrid
-      VERIFACT_LOCAL_REAL_API_MODE: "true"
+      VERIFACT_MODE: academic-demo
       VERIFACT_INLINE_PROCESSING: "true"
       VERIFACT_DATABASE_URL: ${VERIFACT_DATABASE_URL:?Set VERIFACT_DATABASE_URL in backend/.env}
-      VERIFACT_REDIS_URL: ""
       VERIFACT_FRONTEND_ORIGIN: http://localhost:5173
       VERIFACT_PUBLIC_BASE_URL: http://localhost:5173
       VERIFACT_SECURE_COOKIES: "false"

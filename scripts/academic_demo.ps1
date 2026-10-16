@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not (Test-Path $EnvFile)) {
-    throw "Missing $EnvFile. Create it from backend/.env.example and add your private credentials."
+    throw "Missing $EnvFile. Copy .env.academic-demo.example to backend/.env and add your private credentials."
 }
 
 function Invoke-Compose {

@@ -1,105 +1,48 @@
-# VeriFact!
+# VeriFact Academic Demo
 
 > **VeriFact — Verify. Understand. Trust.**
 
-VeriFact is an evidence-based news and claim verification MVP. It separates retrieved evidence, source-policy classification, evidence-bounded interpretation, and deterministic scoring. It never treats an AI response alone as proof. When evidence coverage does not meet the configured threshold, the report is explicitly **scoreless**.
+VeriFact is an evidence-based claim-checking application. It retrieves available source records, applies a configured source policy, uses Groq to interpret retained evidence when configured, and calculates a score only when the evidence meets the application's eligibility rules. A model response by itself is never treated as proof.
 
-See the [changelog](CHANGELOG.md) for project history and the [local-to-production plan](docs/local-to-production-plan.md) for the Supabase, FastAPI, OpenAI, and evidence-provider deployment path.
+## Academic demo setup
 
-## What works in the local MVP
+The Academic Demo profile uses live external evidence services and processes each verification directly in the API request. The profile and complete setup instructions are in [docs/academic-demo.md](docs/academic-demo.md).
 
-The default `local-fixture` mode requires no external credentials. It includes authentication, non-enumerating password-reset behavior, text/URL/claim submission, source-policy classification, fixture evidence, supported/contradicted/insufficient-evidence reports, transparent score eligibility, history, private/public reports, a responsive React interface, API docs, and Docker services.
+### Requirements
 
-Use these fixture phrases in the UI:
+- Python 3.11 or newer
+- Node.js 22 or newer
+- A Supabase PostgreSQL project, or a local SQLite database for a single-machine demonstration
+- A Groq API key for structured evidence analysis
+- Internet access for configured live providers
+- Optional: a Google Fact Check Tools API key for published ClaimReview records, a NewsAPI key, and SMTP credentials
 
-| Input | Expected result |
-| --- | --- |
-| `COVID vaccines reduce hospitalization.` | Evidence-backed report with a score and two policy-classified public-health records. |
-| `Vitamin C cures COVID-19.` | Evidence-backed contradiction report with a score; this is not a declaration of absolute truth. |
-| `Diamonds are being mined on Neptune.` | **Insufficient evidence — no overall score.** |
-
-Fixture records are marked as **local demonstration data**, not live fact checks.
-
-## Local quick start
-
-### Option A: Docker Compose
+### Quick start
 
 ```bash
-cp .env.example .env
-docker compose up --build
+cp .env.academic-demo.example backend/.env
+chmod 600 backend/.env
 ```
 
-Open [http://localhost:5173](http://localhost:5173) for VeriFact, [http://localhost:8000/docs](http://localhost:8000/docs) for the API documentation, and [http://localhost:8025](http://localhost:8025) for the local mailbox interface. The development configuration uses PostgreSQL, Redis, Mailpit, the FastAPI service, the worker, and the Vite client.
+Edit `backend/.env` with the database connection string and provider credentials. Then start the backend and frontend as described in the [Academic Demo guide](docs/academic-demo.md).
 
-### Option B: Lightweight local development
+## What VeriFact reports
+
+- Provider results, source links, publication and retrieval details
+- Source-policy classifications for known domains
+- Evidence-bounded claim assessments and related-news summaries when sufficient source text is available
+- A transparent credibility score only when coverage and source-policy criteria are met
+- An explicit insufficient-evidence result when the evidence is not strong or broad enough
+
+A missing score is an evidence limitation, not a finding that a claim is true or false. See [Scoring and evidence](docs/SCORING_AND_EVIDENCE.md) for the exact rules.
+
+## Checks
 
 ```bash
 cd backend
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-VERIFACT_MODE=local-fixture uvicorn app.main:app --reload --port 8000
-```
-
-In a second terminal:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The local API uses SQLite by default. The UI invokes a fixture-run helper only in local mode, so a separate worker is not required for the lightweight path.
-
-## Core API
-
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/v1/auth/register` | Create a VeriFact account and session. |
-| `POST /api/v1/auth/login` | Start a session. |
-| `POST /api/v1/auth/forgot-password` | Return neutral reset confirmation; exposes a token only in local fixture mode. |
-| `POST /api/v1/auth/reset-password` | Consume a single-use password-reset token. |
-| `POST /api/v1/verifications` | Queue a text, URL, or claim verification. |
-| `GET /api/v1/verifications/{id}` | Read a private report owned by the signed-in user. |
-| `POST /api/v1/verifications/{id}/share` | Toggle owner-controlled public report visibility. |
-| `GET /api/v1/reports/{public_id}` | Read a public report with no private user information. |
-
-The detailed OpenAPI reference runs at `/docs` when the backend starts.
-
-## Enabling external services
-
-Set `VERIFACT_MODE=hybrid` or `VERIFACT_MODE=production` and configure only the credentials you have for Google Fact Check Tools, NewsAPI-compatible search, GDELT, and an OpenAI-compatible endpoint. All provider keys stay on the server. The adapter interface degrades safely: an unavailable provider is recorded as unavailable and cannot be treated as evidence that a claim is false, true, or unsupported.
-
-Read [docs/SCORING_AND_EVIDENCE.md](docs/SCORING_AND_EVIDENCE.md) and [docs/SECURITY.md](docs/SECURITY.md) before production use. A public deployment needs HTTPS, non-default secrets, a dedicated database/backup policy, a real transactional email provider, rate limiting at the proxy/application layer, monitoring, and a policy review process.
-
-### Supabase PostgreSQL
-
-Supabase can replace the local SQLite database without changing the application
-data layer. Copy [.env.supabase.example](.env.supabase.example), set
-`VERIFACT_DATABASE_URL` to the Supabase PostgreSQL connection string, then run
-`alembic upgrade head` from `backend`. To copy existing local records into a
-new Supabase project, use
-[docs/supabase.md](docs/supabase.md) and the one-time migration helper.
-
-## Tests
-
-```bash
-cd backend
-pytest -q
+python3 -m pytest -q
 cd ../frontend
 npm run build
 ```
 
-The backend suite verifies the core requirement that insufficient evidence produces a `null` score, source quality comes from a configured policy, and shared reports omit account data.
-
-## Production readiness
-
-VeriFact now includes a provider-neutral production Compose stack with HTTPS reverse proxy, PostgreSQL, Redis-backed verification jobs, a separate worker, Alembic migrations, structured health/readiness endpoints, rate limits, request limits, secure headers, SMTP-based password reset delivery, backup/restore scripts, and a production smoke-test script.
-
-> **Production mode never uses fixture evidence.** It requires HTTPS origins, PostgreSQL, Redis, secure cookies, and a non-default secret. If live providers are unavailable, the report must show an evidence limitation rather than demo data or an arbitrary score.
-
-Read [docs/deployment.md](docs/deployment.md) before configuring a public host. Copy `.env.production.example` to `.env.production` only on the production host, configure a domain/DNS and credentials there, then follow the backup → build → migration → deploy → readiness → smoke-test sequence. The public deployment itself is intentionally deferred until a hosting account, domain, SMTP provider, and any desired evidence-provider credentials are available.
-
-## Hybrid local provider testing
-
-To test the same provider interfaces used by production from your own computer, read [docs/hybrid-local-testing.md](docs/hybrid-local-testing.md). The optional hybrid override keeps **Local Mock Mode** as the default and reads real OpenAI, Google Fact Check, NewsAPI, GDELT, and SMTP credentials only from the Git-ignored `.env.hybrid` file. In Local Real-API Mode, missing providers remain explicit evidence limitations; VeriFact never fills the gap with fixture evidence.
+The Academic Demo's privacy and credential-handling guidance is in [docs/SECURITY.md](docs/SECURITY.md). Supabase setup is documented in [docs/supabase.md](docs/supabase.md).

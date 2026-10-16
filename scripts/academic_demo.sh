@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 COMPOSE=(docker compose -f docker-compose.academic.yml --env-file backend/.env)
 
 command -v docker >/dev/null 2>&1 || { echo 'Docker was not found. Install Docker and try again.' >&2; exit 1; }
-test -f backend/.env || { echo 'Missing backend/.env. Copy backend/.env.example and add your private credentials.' >&2; exit 1; }
+test -f backend/.env || { echo 'Missing backend/.env. Copy .env.academic-demo.example to backend/.env and add your private credentials.' >&2; exit 1; }
 
 case "$ACTION" in
   start)

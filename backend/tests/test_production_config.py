@@ -44,3 +44,9 @@ def test_hybrid_mode_defaults_to_mock_and_requires_explicit_real_api_switch():
     real_settings = Settings(environment='development', mode='hybrid', local_real_api_mode=True)
     assert mock_settings.live_provider_mode is False
     assert real_settings.live_provider_mode is True
+
+
+def test_academic_demo_profile_enables_live_providers_and_inline_processing():
+    settings = Settings(environment='development', mode='academic-demo', inline_processing=True)
+    assert settings.live_provider_mode is True
+    assert settings.inline_processing is True

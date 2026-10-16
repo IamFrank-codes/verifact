@@ -1,45 +1,37 @@
-# Supabase database
+# Supabase setup for the Academic Demo
 
-VeriFact connects to Supabase through its PostgreSQL connection. The
-Supabase URL and API keys are not needed by the backend unless Supabase
-Auth/Storage is added later; do not put a `service_role` key in this project.
+The Academic Demo can store accounts, verification reports, evidence, and scores in a Supabase PostgreSQL database. The application connects through its FastAPI backend.
 
-## Configure a new deployment
+## Create the connection
 
-1. In Supabase, open **Connect** and copy a PostgreSQL connection string.
-   Use the transaction pooler for a deployment with many short-lived
-   connections. Convert its scheme to `postgresql+psycopg://` if needed.
-2. Set `VERIFACT_DATABASE_URL` in the deployment environment. Do not commit
-   the password. A template is provided in
-   [`.env.supabase.example`](../.env.supabase.example).
-3. Run the schema migration from the backend directory:
+1. Open the Supabase project's **Connect** panel and copy a PostgreSQL connection string.
+2. If using a pooled connection, choose a pooler option compatible with the app's short-lived requests and migration command.
+3. Set the string as `VERIFACT_DATABASE_URL` in the private `backend/.env` file. URL-encode special characters in the database password where required.
+4. Keep the connection string on the backend. Do not use a Supabase `service_role` key in the frontend or commit it to the repository.
 
-   ```bash
-   alembic upgrade head
-   ```
+The repository's [Academic Demo environment example](../.env.academic-demo.example) shows the expected SQLAlchemy URL format. Replace every project and password placeholder before starting the app.
 
-   The Alembic environment reads `VERIFACT_DATABASE_URL`; it is no longer
-   hard-coded to SQLite.
-4. Start the API and worker with the same environment. When the database URL
-   points to PostgreSQL, the application does not call `create_all`; Alembic
-   remains the authoritative schema process.
+## Apply the schema
 
-## Copy existing local data
-
-Make a backup of the local database first. The one-time migration helper
-requires an empty Supabase schema and refuses to merge into non-empty tables:
+From the repository root:
 
 ```bash
-python scripts/migrate_to_supabase.py `
-  --source-url sqlite:///./backend/verifact.db `
-  --target-url "$env:VERIFACT_DATABASE_URL"
+cd backend
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
 ```
 
-On a POSIX shell, use `\` instead of the PowerShell backtick. The helper
-applies Alembic migrations before copying rows and preserves all IDs,
-timestamps, password hashes, reports, and relationships. It does not copy
-database users managed by Supabase Auth because VeriFact currently owns its
-own `users` table and session cookies.
+The Alembic configuration reads `VERIFACT_DATABASE_URL` from the backend environment. Confirm that the command completes successfully before testing account creation or report storage.
 
-After validating `/ready`, point the application at the Supabase URL and keep
-the local database backup offline according to your retention policy.
+## Confirm the connection
+
+Start the backend and check:
+
+```bash
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:8000/ready
+```
+
+Then create an account, submit a test claim, and confirm that its report and evidence appear in the application history. Keep access to the Supabase project and its connection details limited to the people operating the academic demonstration.

@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = 'VeriFact'
     environment: Literal['development', 'test', 'production'] = 'development'
-    mode: Literal['local-fixture', 'hybrid', 'production'] = 'local-fixture'
+    mode: Literal['local-fixture', 'academic-demo', 'hybrid', 'production'] = 'local-fixture'
     database_url: str = 'sqlite:///./verifact.db'
     redis_url: str | None = None
     secret_key: str = 'change-this-for-production'
@@ -77,7 +77,7 @@ class Settings(BaseSettings):
 
     @property
     def live_provider_mode(self) -> bool:
-        return self.mode == 'production' or (self.mode == 'hybrid' and self.local_real_api_mode)
+        return self.mode in {'academic-demo', 'production'} or (self.mode == 'hybrid' and self.local_real_api_mode)
 
     @property
     def uses_sqlite(self) -> bool:

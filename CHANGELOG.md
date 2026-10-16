@@ -1,78 +1,21 @@
-# Changelog
+# VeriFact Academic Demo changes
 
-All notable changes to VeriFact are documented here. Entries are grouped by date and describe user-visible changes, architecture work, and validation status.
+This log records user-visible changes relevant to the Academic Demo.
 
-## 2026-09-15
+## 2026-10-16
 
-### Added
+- Added a named `academic-demo` application profile for live evidence retrieval and inline report processing.
+- Updated the Academic Demo environment example and Compose configuration to use that profile.
+- Consolidated setup, provider, Supabase, security, scoring, and validation guidance around one academic workflow.
+- Updated the live-evidence regression tests to exercise the Academic Demo profile.
 
-- Added SMTP-backed password-reset delivery and email-verification links with resend support; hybrid and production accounts must verify their email before signing in.
-- Added the email-verification token migration and frontend verification screen.
+## 2026-10-15
 
-- Added an academic real-API demonstration path using hybrid mode with inline processing, so live provider calls can run locally without Docker, Redis, a domain, or public hosting.
-- Added a Docker academic-demo overlay for running the frontend and FastAPI against Supabase PostgreSQL with inline processing.
-- Added `scripts/academic_demo.ps1` and `scripts/academic_demo.sh` with start, stop, restart, status, and logs actions.
-- Replaced the academic Compose overlay with a standalone two-service file so it cannot inherit a dependency on the local PostgreSQL container.
-- Added `.env.academic-demo.example` with Supabase, OpenAI, Google Fact Check, GDELT, and NewsAPI configuration placeholders.
-- Added a Supabase production Compose overlay and deployment configuration for the later hosted deployment path.
+- Improved live evidence retention, provider status messages, and evidence-bounded related-news summaries.
+- Added clearer diagnostics for model and evidence-provider failures.
+- Added email-based password reset with a single-use link and a manual code fallback.
+- Improved the verification, report, and account-recovery interfaces.
 
-## 2026-09-12
+## Core application capabilities
 
-### Added
-
-- Added a production transition plan covering the move from local development to a live FastAPI deployment backed by Supabase PostgreSQL and external evidence providers. See [`docs/local-to-production-plan.md`](docs/local-to-production-plan.md).
-- Added recommendations for Google Fact Check Tools, GDELT, NewsAPI, ClaimBuster, primary-source retrieval, and retrieval-grounded OpenAI assistance.
-
-### Changed
-
-- Moved the login and signup form column to the top of the viewport to reduce unnecessary vertical scrolling.
-- Moved the left authentication branding panel upward by reducing its top padding and headline spacing.
-- Replaced object-rendered password validation errors with the clear message **“The passwords are not the same.”**
-- Added general API validation-error normalization so structured backend errors are rendered as readable text rather than `[object Object]`.
-
-### Validation
-
-- Frontend production build passed.
-- Backend test suite passed with 8 tests.
-- Git diff checks passed.
-- Changes were pushed to the `main` branch.
-
-## 2026-09-10
-
-### Changed
-
-- Standardized the main application, Verify, private report, and public report shells around a 960px maximum content width.
-- Removed the Verify page back button.
-- Changed verification progress and error feedback to use one status message at a time with a short replacement animation.
-- Added `scripts/refresh_stack.sh` to stop the Compose stack, pull repository updates, rebuild, restart, and display service status.
-
-### Database and deployment
-
-- Pulled and integrated the Supabase deployment configuration.
-- Applied the VeriFact schema to the active Supabase project through the Supabase MCP.
-- Migrated the local SQLite data while preserving IDs and relationships.
-- Verified the migrated row counts: 1 user, 2 sources, 1 verification, 1 claim, 2 evidence records, and 1 score record.
-
-### Validation
-
-- Frontend production build passed.
-- Backend test suite passed with 8 tests.
-- Supabase migration and table inspection passed.
-- Changes were pushed to the `main` branch.
-
-## 2026-08-26 to 2026-09-09
-
-### Initial VeriFact MVP
-
-- Added authentication, password reset, claim and article verification, evidence retention, source-policy classification, deterministic scoring, scoreless insufficient-evidence handling, history, and public/private reports.
-- Added local fixture mode for deterministic development and demonstration workflows.
-- Added hybrid and production configuration modes for external providers.
-- Added provider adapters for Google Fact Check Tools, GDELT, and NewsAPI.
-- Added optional structured OpenAI evidence assessment constrained to retained evidence IDs.
-- Added PostgreSQL/Alembic migration support, Redis/RQ worker support, production Compose configuration, security headers, rate limiting, health checks, readiness checks, and operational documentation.
-
-### Validation
-
-- The backend regression suite covers scored fixture reports, scoreless insufficient-evidence reports, public/private report behavior, and password-reset behavior.
-- The frontend TypeScript production build passed.
-- Static delivery validation covered the Compose graph and required deployment assets.
+The Academic Demo includes account access, claim verification, source-policy classification, provider provenance, evidence-bounded assessment, deterministic score eligibility, report history, and private or explicitly shared reports. Insufficient evidence remains visibly scoreless.
