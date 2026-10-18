@@ -23,6 +23,8 @@ def provider_failure_message(provider_name: str, exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         status_code = exc.response.status_code
         if status_code == 429:
+            if provider_name == 'GDELT':
+                return 'GDELT rate-limited this request (HTTP 429). VeriFact now spaces GDELT requests and reuses recent results, but GDELT may still throttle the server IP. No GDELT result was retained; try later or use another configured source.'
             return f'{provider_name} rate-limited this request (HTTP 429). No provider result was retained as evidence; retry later or use another configured source.'
         return f'{provider_name} returned HTTP {status_code}. No provider result was retained as evidence.'
     if isinstance(exc, httpx.TimeoutException):

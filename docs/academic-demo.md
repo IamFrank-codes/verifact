@@ -61,7 +61,7 @@ This provider searches previously published fact-check records. A search with no
 
 ### GDELT and optional news discovery
 
-The template enables GDELT by default. GDELT does not require an API key. Its response time and availability can vary, so a timeout or rate limit may appear as a provider limitation in the report.
+The template enables GDELT by default. GDELT does not require an API key and asks clients to limit requests to one every five seconds. VeriFact paces GDELT calls and caches successful results for five minutes, but GDELT may still throttle a shared server IP during high traffic. If that continues, use another configured provider or contact GDELT about the limit.
 
 NewsAPI is optional. Set `VERIFACT_NEWSAPI_KEY` only if you have a key and have reviewed the provider's current plan limits and terms.
 

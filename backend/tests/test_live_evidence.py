@@ -27,8 +27,8 @@ def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
     request.json.return_value = response.json.return_value
     calls = {}
 
-    def fake_get(url, *, params, timeout):
-        calls.update(url=url, params=params, timeout=timeout)
+    def fake_get(url, *, params, timeout, headers):
+        calls.update(url=url, params=params, timeout=timeout, headers=headers)
         return request
 
     def fake_extract(url):
@@ -36,6 +36,9 @@ def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
             raise RuntimeError('publisher blocks article extraction')
         return {'title': 'A related headline', 'publisher': 'Example News', 'text': 'Article body with useful context. ' * 100, 'published_at': '2026-10-15'}
 
+    providers._gdelt_cache.clear()
+    providers._gdelt_last_request_at = 0.0
+    monkeypatch.setattr(providers, 'sleep', lambda _seconds: None)
     monkeypatch.setattr(providers, 'get_settings', lambda: SimpleNamespace(gdelt_enabled=True))
     monkeypatch.setattr(providers.httpx, 'get', fake_get)
     monkeypatch.setattr(providers, 'extract_article', fake_extract)
@@ -52,6 +55,57 @@ def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
     assert results[1].url == 'https://news.example/headline-only'
     assert results[1].excerpt == 'Another related headline'
 
+
+
+def test_gdelt_caches_repeated_claim_searches(monkeypatch):
+    providers._gdelt_cache.clear()
+    providers._gdelt_last_request_at = 0.0
+    monkeypatch.setattr(providers, 'sleep', lambda _seconds: None)
+    monkeypatch.setattr(providers, 'get_settings', lambda: SimpleNamespace(gdelt_enabled=True))
+    response = Mock(status_code=200)
+    response.raise_for_status = Mock()
+    response.json.return_value = {'articles': [{'url': 'https://news.example/cached', 'title': 'Cached news'}]}
+    calls = []
+    def fake_get(url, *, params, timeout, headers):
+        calls.append(params['query'])
+        return response
+    monkeypatch.setattr(providers.httpx, 'get', fake_get)
+    monkeypatch.setattr(providers, 'extract_article', lambda _url: (_ for _ in ()).throw(RuntimeError('blocked')))
+
+    provider = providers.GDELTProvider()
+    first = provider.search('A repeated claim')
+    second = provider.search('  a REPEATED   claim  ')
+
+    assert len(first) == len(second) == 1
+    assert calls == ['A repeated claim']
+
+
+def test_gdelt_retries_once_after_rate_limit(monkeypatch):
+    providers._gdelt_cache.clear()
+    providers._gdelt_last_request_at = 0.0
+    delays = []
+    clock = [100.0]
+    def advance(seconds):
+        delays.append(seconds)
+        clock[0] += seconds
+    monkeypatch.setattr(providers, 'sleep', advance)
+    monkeypatch.setattr(providers, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(providers, 'get_settings', lambda: SimpleNamespace(gdelt_enabled=True))
+    limited = Mock(status_code=429, headers={}, text='Please limit requests to one every 5 seconds.')
+    limited.raise_for_status = Mock()
+    success = Mock(status_code=200)
+    success.raise_for_status = Mock()
+    success.json.return_value = {'articles': []}
+    responses = iter([limited, success])
+    calls = []
+    def fake_get(url, *, params, timeout, headers):
+        calls.append(url)
+        return next(responses)
+    monkeypatch.setattr(providers.httpx, 'get', fake_get)
+
+    assert providers.GDELTProvider().search('a rate limited claim') == []
+    assert len(calls) == 2
+    assert delays == [5.25]
 
 def test_provider_error_message_explains_rate_limit_without_leaking_request_url():
     request = httpx.Request('GET', 'https://api.example/search?apiKey=secret')
