@@ -193,7 +193,9 @@ def test_url_submission_searches_with_extracted_article_title(monkeypatch):
     report_response = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
     assert report_response.status_code == 200
     report = report_response.json()
-    assert searched == ['City council approves a new affordable housing plan']
+    assert searched[0].startswith('\"City council approves a new affordable housing plan\"')
+    assert 'approved a new affordable housing plan' in searched[0]
+    assert len(searched[0]) <= 240
     assert report['article']['title'] == extracted['title']
     assert report['claims'][0]['evidence'][0]['provider'] == 'Test news provider'
     assert report['claims'][0]['evidence'][0]['relationship_type'] == 'supporting'

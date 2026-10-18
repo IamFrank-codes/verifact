@@ -6,10 +6,10 @@ VeriFact separates evidence retrieval, source-policy classification, evidence-bo
 
 A report is score-eligible only when all of these conditions are met:
 
-1. At least **60% of the weighted checkable claims** have a valid evidence assessment. The default threshold is configurable through `VERIFACT_SCORE_COVERAGE_THRESHOLD`.
-2. At least one retained evidence item attached to a validly assessed claim comes from a source classified **High** or **Medium** by the source policy.
+1. At least **60% of the weighted checkable claims** have a valid evidence assessment supported or contradicted by a cited record. The default threshold is configurable through `VERIFACT_SCORE_COVERAGE_THRESHOLD`.
+2. At least one supporting or contradicting evidence item attached to a validly assessed claim comes from a source classified **High** or **Medium** by the source policy. Context-only records, including merely related news or fact-check results, do not satisfy these gates.
 
-If a condition fails, the report stores `score: null` and displays **Insufficient evidence — no overall score**. VeriFact does not replace a missing score with zero, a midpoint, or model confidence. Coverage is calculated over checkable claims and their importance weights; it is not a measure of how much of the original paragraph was understood.
+If a condition fails, the report stores `score: null`, displays **Insufficient evidence — no overall score**, and gives the specific eligibility reason. VeriFact does not replace a missing score with zero, a midpoint, or model confidence. Coverage is calculated over checkable claims and their importance weights; it is not a measure of how much of the original paragraph was understood.
 
 ## Score components
 
@@ -43,6 +43,6 @@ A domain absent from the policy is **Unknown**. Unknown does not mean false or i
 
 ## What the providers and model do
 
-Google Fact Check Tools searches previously published ClaimReview records; no match is not a verdict. GDELT and optional NewsAPI help discover news coverage and source links. Groq assesses the claim against the retained evidence packet and may produce a short related-news summary. VeriFact validates referenced evidence IDs and computes any eligible score itself.
+For URL submissions, VeriFact searches with the extracted headline plus the article lead to reduce broad, unrelated matches. Google Fact Check Tools searches previously published ClaimReview records; no match is not a verdict. GDELT and optional NewsAPI help discover news coverage and source links. Groq assesses the claim against the retained evidence packet and may produce a short related-news summary. VeriFact validates referenced evidence IDs and computes any eligible score itself.
 
 If providers return no relevant, retained evidence—or if the retained sources fail the policy gate—the report remains scoreless and explains the limitation rather than inventing citations or a summary.

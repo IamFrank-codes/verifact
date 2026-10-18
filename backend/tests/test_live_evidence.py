@@ -176,3 +176,23 @@ def test_analysis_provider_label_identifies_groq(monkeypatch):
     monkeypatch.setattr(verification.settings, 'openai_base_url', 'https://api.groq.com/openai/v1')
 
     assert verification.analysis_provider_name() == 'Groq structured evidence analysis'
+
+
+def test_context_only_high_quality_records_do_not_qualify_for_a_score(monkeypatch):
+    class FakeDb:
+        def __init__(self):
+            self.records = []
+        def add(self, record):
+            self.records.append(record)
+    source = SimpleNamespace(quality_class='High', domain='who.int', source_type='International organization')
+    evidence = SimpleNamespace(source=source, relationship_type='contextual', published_at='2026-10-18')
+    claim = SimpleNamespace(checkable=True, verdict='Supported by Available Evidence', importance=1.0, evidence=[evidence])
+    verification_record = SimpleNamespace(id='verification-1', claims=[claim], article=None, score=None, score_band=None, coverage_pct=None, evidence_status=None)
+    db = FakeDb()
+
+    verification.score_verification(db, verification_record)
+
+    assert verification_record.score is None
+    score = db.records[-1]
+    assert score.eligible is False
+    assert 'contextual records alone do not count' in score.eligibility_reason

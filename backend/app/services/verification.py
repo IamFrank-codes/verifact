@@ -34,17 +34,17 @@ def provider_failure_message(provider_name: str, exc: Exception) -> str:
     return f'{provider_name} request failed. No provider result was retained as evidence.'
 
 def evidence_search_query(input_type: str, claim_text: str, content: str, article_title: str | None = None) -> str:
+    normalized_content = ' '.join(content.split())
     if input_type == 'url' and article_title and article_title.strip():
-        candidate = article_title
+        lead = normalized_content.split('. ', 1)[0]
+        candidate = f'"{article_title.strip()}" {lead}' if lead else f'"{article_title.strip()}"'
     elif input_type in {'url', 'text'}:
-        candidate = content
+        candidate = normalized_content
     else:
         candidate = claim_text
     candidate = ' '.join(candidate.split())
     if len(candidate) > 240:
-        # Article bodies are poor search queries; keep the opening sentence or a short prefix.
-        first_sentence = candidate.split('. ', 1)[0]
-        candidate = first_sentence if len(first_sentence) <= 240 else candidate[:240].rsplit(' ', 1)[0]
+        candidate = candidate[:240].rsplit(' ', 1)[0]
     return candidate or claim_text[:240]
 
 
@@ -68,22 +68,31 @@ def create_evidence(db: Session, claim: Claim, item: EvidenceItem, fixture: bool
 def score_verification(db: Session, verification: Verification):
     claims = verification.claims
     checkable = [c for c in claims if c.checkable]
-    valid = [c for c in checkable if c.verdict in VERDICT_VALUES]
+    relevant_relationships = {'supporting', 'contradicting'}
+    valid = [c for c in checkable if c.verdict in VERDICT_VALUES and any(e.relationship_type in relevant_relationships for e in c.evidence)]
     total_weight = sum(c.importance for c in checkable)
     coverage = (sum(c.importance for c in valid) / total_weight) if total_weight else 0.0
-    quality_evidence = [e for c in valid for e in c.evidence]
-    eligible = bool(checkable and valid and coverage >= settings.score_coverage_threshold and any(e.source.quality_class in {'High', 'Medium'} for e in quality_evidence))
+    relevant_evidence = [e for c in valid for e in c.evidence if e.relationship_type in relevant_relationships]
+    quality_evidence = [e for e in relevant_evidence if e.source.quality_class in {'High', 'Medium'}]
+    eligible = bool(checkable and valid and coverage >= settings.score_coverage_threshold and quality_evidence)
     if not eligible:
-        reason = 'No checkable factual claims were identified.' if not checkable else f'Only {coverage:.0%} of weighted checkable claims had a valid evidence assessment; VeriFact requires {settings.score_coverage_threshold:.0%} plus qualifying source-policy coverage before scoring.'
+        if not checkable:
+            reason = 'No checkable factual claims were identified.'
+        elif not valid:
+            reason = 'No claim received a conclusive assessment backed or contradicted by cited evidence; contextual records alone do not count toward scoring.'
+        elif coverage < settings.score_coverage_threshold:
+            reason = f'Only {coverage:.0%} of weighted checkable claims had relevant evidence; VeriFact requires {settings.score_coverage_threshold:.0%} coverage.'
+        else:
+            reason = 'Relevant evidence was retrieved, but none was classified High or Medium by the source policy.'
         verification.score = None; verification.score_band = None; verification.coverage_pct = round(coverage * 100, 1)
         verification.evidence_status = 'No checkable factual claims' if not checkable else 'Insufficient evidence — no overall score'
         db.add(VerificationScore(verification_id=verification.id, eligible=False, eligibility_reason=reason, components={'coverage_pct': round(coverage * 100, 1), 'threshold_pct': round(settings.score_coverage_threshold * 100, 1)}))
         return
     accuracy = 30 * sum(VERDICT_VALUES[c.verdict] * c.importance for c in valid) / sum(c.importance for c in valid)
     strength = 20 * sum(QUALITY_VALUES[e.source.quality_class] for e in quality_evidence) / len(quality_evidence)
-    independent = min(15, 15 * len({e.source.domain for e in quality_evidence}) / 2)
-    fact_check = min(15, 15 * sum(1 for e in quality_evidence if e.source.source_type == 'Fact-check organization') / 1)
-    recency = 10 if any(e.published_at and e.published_at >= '2023' for e in quality_evidence) else 5
+    independent = min(15, 15 * len({e.source.domain for e in relevant_evidence}) / 2)
+    fact_check = min(15, 15 * sum(1 for e in relevant_evidence if e.source.source_type == 'Fact-check organization') / 1)
+    recency = 10 if any(e.published_at and e.published_at >= '2023' for e in relevant_evidence) else 5
     transparency = 10 if verification.article and verification.article.title and verification.article.publisher else 6
     components = {'evidence_supported_claim_assessment': round(accuracy, 1), 'evidence_strength': round(strength, 1), 'independent_corroboration': round(independent, 1), 'fact_check_evidence': round(fact_check, 1), 'recency_and_freshness': round(recency, 1), 'article_transparency': round(transparency, 1)}
     score = round(sum(components.values()))
