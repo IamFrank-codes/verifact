@@ -67,6 +67,15 @@ class GDELTProvider:
     @staticmethod
     def _claim_key(claim: str) -> str:
         return ' '.join(claim.casefold().split())
+    @staticmethod
+    def _normalize_seendate(value: str | None) -> str | None:
+        if not value:
+            return None
+        match = re.fullmatch(r'(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})Z?', str(value))
+        if not match:
+            return str(value)
+        year, month, day, hour, minute, second = match.groups()
+        return f'{year}-{month}-{day}T{hour}:{minute}:{second}Z'
 
     @staticmethod
     def _wait_for_slot() -> None:
@@ -124,7 +133,7 @@ class GDELTProvider:
                 headline = (item.get('title') or 'Related news article')[:300]
                 excerpt = headline
                 name = headline
-                published_at = item.get('seendate')
+                published_at = self._normalize_seendate(item.get('seendate'))
                 try:
                     article = extract_article(url)
                     article_text = article.get('text', '').strip()

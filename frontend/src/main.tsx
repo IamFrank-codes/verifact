@@ -29,7 +29,7 @@ const api = async <T,>(path:string, options:RequestInit = {}, timeoutMs=API_TIME
   if(!response.ok) throw new Error(detail)
   return body as T
 }
-const fmtDate=(date?:string|null)=>date?new Intl.DateTimeFormat('en',{dateStyle:'medium'}).format(new Date(date)):'Date unavailable'
+const fmtDate=(date?:string|null)=>{if(!date)return 'Date unavailable';const parsed=new Date(date);return Number.isNaN(parsed.getTime())?'Date unavailable':new Intl.DateTimeFormat('en',{dateStyle:'medium'}).format(parsed)}
 const verdictClass=(value?:string|null)=>{
   if(value?.includes('Supported')) return 'status-supported'
   if(value?.includes('Contradicted')) return 'status-contradicted'
@@ -80,7 +80,7 @@ function Verify({go}:{go:(r:string)=>void}){
   const[busy,setBusy]=useState(false);
   const[stage,setStage]=useState('');
   async function waitForReport(id:string){
-    for(let attempt=0;attempt<60;attempt+=1){
+    for(let attempt=0;attempt<120;attempt+=1){
       const report=await api<Verification>(`/api/v1/verifications/${id}`);
       setStage(`${report.stage}…`);
       if(report.status==='completed')return report;
@@ -95,7 +95,7 @@ function Verify({go}:{go:(r:string)=>void}){
       const created=await api<{id:string;mode:string;stage:string}>('/api/v1/verifications',{method:'POST',body:JSON.stringify({input_type:type,content})},VERIFY_SUBMISSION_TIMEOUT_MS);
       if(created.mode==='local-fixture'){
         setStage('Processing deterministic local evidence…');
-        const report=await api<Verification>(`/api/v1/verifications/${created.id}/run-fixture`,{method:'POST'});
+        const report=await api<Verification>(`/api/v1/verifications/${created.id}/run-fixture`,{method:'POST'},VERIFY_SUBMISSION_TIMEOUT_MS);
         go('/report/'+report.id);
       }else{
         setStage('Queued for retained-evidence processing…');

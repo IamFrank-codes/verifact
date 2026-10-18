@@ -50,6 +50,7 @@ def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
     assert len(results) == 2
     assert results[0].url == 'https://news.example/story'
     assert results[0].name == 'A related headline'
+    assert results[0].published_at == '2026-10-15T12:00:00Z'
     assert results[0].excerpt.startswith('Article body with useful context.')
     assert len(results[0].excerpt) <= 1201
     assert results[1].url == 'https://news.example/headline-only'
@@ -176,3 +177,9 @@ def test_analysis_provider_label_identifies_groq(monkeypatch):
     monkeypatch.setattr(verification.settings, 'openai_base_url', 'https://api.groq.com/openai/v1')
 
     assert verification.analysis_provider_name() == 'Groq structured evidence analysis'
+
+
+def test_gdelt_seendate_is_normalized_for_frontend():
+    assert providers.GDELTProvider._normalize_seendate('20261015T120000Z') == '2026-10-15T12:00:00Z'
+    assert providers.GDELTProvider._normalize_seendate('20261015120000') == '2026-10-15T12:00:00Z'
+    assert providers.GDELTProvider._normalize_seendate(None) is None
