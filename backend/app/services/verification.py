@@ -33,6 +33,21 @@ def provider_failure_message(provider_name: str, exc: Exception) -> str:
         return f'{provider_name} could not be reached. No provider result was retained as evidence.'
     return f'{provider_name} request failed. No provider result was retained as evidence.'
 
+def evidence_search_query(input_type: str, claim_text: str, content: str, article_title: str | None = None) -> str:
+    if input_type == 'url' and article_title and article_title.strip():
+        candidate = article_title
+    elif input_type in {'url', 'text'}:
+        candidate = content
+    else:
+        candidate = claim_text
+    candidate = ' '.join(candidate.split())
+    if len(candidate) > 240:
+        # Article bodies are poor search queries; keep the opening sentence or a short prefix.
+        first_sentence = candidate.split('. ', 1)[0]
+        candidate = first_sentence if len(first_sentence) <= 240 else candidate[:240].rsplit(' ', 1)[0]
+    return candidate or claim_text[:240]
+
+
 def set_stage(db: Session, verification: Verification, stage: str, status: str = 'processing'):
     verification.stage, verification.status = stage, status
     db.commit()
@@ -86,36 +101,44 @@ def run_verification(db: Session, verification_id: str):
     try:
         set_stage(db, verification, 'Processing input')
         content = verification.original_input
+        article_title = None
         if verification.input_type == 'url':
             set_stage(db, verification, 'Extracting article')
             if settings.mode == 'local-fixture' and 'fixture' in content.lower():
                 article_data = {'url': content, 'title': 'VeriFact local fixture article', 'author': 'VeriFact Fixture Desk', 'publisher': 'VeriFact Fixture Archive', 'published_at': '2024-09-10', 'text': content}
             else:
                 article_data = extract_article(content)
-            article = Article(url=article_data['url'], title=article_data.get('title'), author=article_data.get('author'), publisher=article_data.get('publisher'), published_at=article_data.get('published_at'), extracted_text=article_data['text'], extraction_status='complete')
+            article_title = article_data.get('title')
+            article = Article(url=article_data['url'], title=article_title, author=article_data.get('author'), publisher=article_data.get('publisher'), published_at=article_data.get('published_at'), extracted_text=article_data['text'], extraction_status='complete')
             db.add(article); db.flush(); verification.article_id = article.id; verification.article = article; content = article_data['text']; db.commit()
+        should_search_live_sources = settings.live_provider_mode or verification.input_type == 'url'
+        providers = enabled_external_providers() if should_search_live_sources else []
+        use_live_sources = settings.live_provider_mode or bool(providers)
         set_stage(db, verification, 'Identifying factual claims')
-        use_fixture = settings.mode == 'local-fixture' or (settings.mode == 'hybrid' and not settings.local_real_api_mode)
+        use_fixture = not use_live_sources and (settings.mode == 'local-fixture' or (settings.mode == 'hybrid' and not settings.local_real_api_mode))
         fixture = find_fixture(content) if use_fixture else None
         result = fixture or generic_claim(content)
         freshness_note = 'Evidence dates are displayed on each record. Local fixtures are demonstration data.' if use_fixture else 'Evidence dates are displayed on each retained live-provider record.'
         claim = Claim(verification_id=verification.id, sequence=1, text=result['claim'], verdict=result['verdict'], explanation=result['explanation'], evidence_coverage='2 retained evidence records' if result['evidence'] else 'No retained evidence records', freshness_note=freshness_note)
         db.add(claim); db.flush(); db.commit()
         set_stage(db, verification, 'Retrieving and comparing evidence')
+        search_query = evidence_search_query(verification.input_type, claim.text, content, article_title)
         items = list(result['evidence'])
-        providers = enabled_external_providers() if settings.live_provider_mode else []
-        if settings.live_provider_mode and not providers:
-            db.add(ProviderRun(verification_id=verification.id, provider='Live evidence providers', status='unavailable', message='No live evidence-provider credentials are configured. VeriFact did not use fixture evidence.'))
+        if should_search_live_sources and not providers:
+            message = 'No live evidence providers are configured for this URL. Configure GDELT, Google Fact Check Tools, or NewsAPI to retrieve external records.'
+            if settings.live_provider_mode:
+                message += ' VeriFact did not use fixture evidence.'
+            db.add(ProviderRun(verification_id=verification.id, provider='Live evidence providers', status='unavailable', message=message))
         for provider in providers:
             try:
-                found = provider.search(claim.text); items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned.'))
+                found = provider.search(search_query); items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned for the article search.'))
             except Exception as exc:
                 logger.warning('Evidence provider %s failed (%s)', provider.name, type(exc).__name__)
                 db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message=provider_failure_message(provider.name, exc)))
         for item in items:
             create_evidence(db, claim, item, fixture=bool(use_fixture and item.provider == 'VeriFact local fixture'))
         db.commit()
-        if settings.live_provider_mode:
+        if use_live_sources:
             verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source)).filter(Verification.id == verification_id).first()
             analyzed_claim = verification.claims[0]
             packet = [{'id': evidence.id, 'source': evidence.source.name, 'url': evidence.source.canonical_url, 'source_type': evidence.source.source_type, 'quality_class': evidence.source.quality_class, 'published_at': evidence.published_at, 'excerpt': evidence.excerpt} for evidence in analyzed_claim.evidence]
@@ -169,7 +192,7 @@ def run_verification(db: Session, verification_id: str):
             score_summary = f'VeriFact produced an evidence-dependent score from {verification.coverage_pct:.0f}% weighted claim coverage. Review the cited records and policy context before drawing conclusions.'
         if news_summary:
             verification.summary = f'Related news summary:\n{news_summary}\n\n{score_summary}'
-        elif settings.live_provider_mode:
+        elif use_live_sources:
             if not items:
                 reason = 'Related news summary unavailable: no source records were retrieved.'
             elif not is_enabled():

@@ -150,3 +150,51 @@ def test_live_report_includes_retained_source_and_model_news_summary(monkeypatch
     assert report['summary'].startswith('Related news summary:\nThe retrieved source reports relevant context')
     assert report['claims'][0]['evidence'][0]['source']['url'] == 'https://news.example/article'
     assert report['claims'][0]['evidence'][0]['excerpt'] == 'Article excerpt with directly relevant reporting.'
+
+
+def test_url_submission_searches_with_extracted_article_title(monkeypatch):
+    main_module.limiter._storage.reset()
+    auth_client('url-search@example.com')
+    for settings in (main_module.settings, verification_service.settings):
+        monkeypatch.setattr(settings, 'mode', 'local-fixture')
+        monkeypatch.setattr(settings, 'inline_processing', True)
+    extracted = {
+        'url': 'https://news.example/housing-plan',
+        'title': 'City council approves a new affordable housing plan',
+        'author': 'Staff Reporter',
+        'publisher': 'Example News',
+        'published_at': '2026-10-17',
+        'text': ('The city council approved a new affordable housing plan on Tuesday. ' * 20),
+    }
+    monkeypatch.setattr(verification_service, 'extract_article', lambda _url: extracted)
+    searched = []
+    class TestNewsProvider:
+        name = 'Test news provider'
+        def search(self, query):
+            searched.append(query)
+            return [EvidenceItem('Example News', 'https://sources.example/housing-plan', '2026-10-17', 'The council approved the housing plan by a majority vote.', 'contextual', 'The report covers the same plan as the submitted article.', self.name)]
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: [TestNewsProvider()])
+    monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
+    def fake_assessment(claim_text, packet):
+        assert len(claim_text) > 240
+        return EvidenceAssessment(
+            verdict='Mostly Supported',
+            explanation='The retained record supports the central reported event.',
+            news_summary='The retrieved source reports a vote on the plan.',
+            supporting_ids=[packet[0]['id']],
+            contradicting_ids=[],
+            contextual_ids=[],
+            freshness_note='The source is recent.',
+        )
+    monkeypatch.setattr(verification_service, 'analyze_evidence', fake_assessment)
+
+    created = client.post('/api/v1/verifications', json={'input_type': 'url', 'content': 'https://news.example/housing-plan'})
+    assert created.status_code == 202
+    report_response = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
+    assert report_response.status_code == 200
+    report = report_response.json()
+    assert searched == ['City council approves a new affordable housing plan']
+    assert report['article']['title'] == extracted['title']
+    assert report['claims'][0]['evidence'][0]['provider'] == 'Test news provider'
+    assert report['claims'][0]['evidence'][0]['relationship_type'] == 'supporting'
+    assert report['provider_runs'][0]['message'] == '1 record(s) returned for the article search.'

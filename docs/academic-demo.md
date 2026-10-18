@@ -47,7 +47,7 @@ VERIFACT_OPENAI_BASE_URL=https://api.groq.com/openai/v1
 VERIFACT_OPENAI_MODEL=openai/gpt-oss-20b
 ```
 
-The model receives the claim and retained evidence packet. It may produce an evidence-bounded assessment and related-news summary; it does not choose source quality or calculate VeriFact's score.
+The model receives the claim and retained evidence packet. It may produce an evidence-bounded assessment and related-news summary; it does not choose source quality or calculate VeriFact's score. For URL submissions, VeriFact extracts the article and searches enabled providers using its headline (or a short lead-text fallback), rather than sending the entire article body as the search query. Configured providers are also used for URL submissions in local-fixture mode; without configured providers, local fixtures remain in effect.
 
 ### Google Fact Check Tools
 
