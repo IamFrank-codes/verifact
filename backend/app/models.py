@@ -127,7 +127,7 @@ class VerificationScore(Base):
     verification_id: Mapped[str] = mapped_column(ForeignKey('verifications.id', ondelete='CASCADE'), unique=True)
     eligible: Mapped[bool] = mapped_column(Boolean)
     eligibility_reason: Mapped[str] = mapped_column(Text)
-    formula_version: Mapped[str] = mapped_column(String(50), default='1.0.0')
+    formula_version: Mapped[str] = mapped_column(String(50), default='1.1.0')
     components: Mapped[dict] = mapped_column(JSON, default=dict)
     verification: Mapped['Verification'] = relationship(back_populates='score_record')
 

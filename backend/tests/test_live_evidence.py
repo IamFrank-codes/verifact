@@ -195,4 +195,5 @@ def test_context_only_high_quality_records_do_not_qualify_for_a_score(monkeypatc
     assert verification_record.score is None
     score = db.records[-1]
     assert score.eligible is False
+    assert score.formula_version == '1.1.0'
     assert 'contextual records alone do not count' in score.eligibility_reason
