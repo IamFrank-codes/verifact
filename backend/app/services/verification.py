@@ -12,7 +12,6 @@ from app.ai.structured import analyze_evidence, is_enabled, EvidenceAnalysisErro
 
 settings = get_settings()
 logger = logging.getLogger('verifact.verification')
-SCORE_FORMULA_VERSION = '1.1.0'
 VERDICT_VALUES = {'Supported by Available Evidence': 1.0, 'Mostly Supported': 0.78, 'Mixed or Potentially Misleading': 0.48, 'Contradicted by Available Evidence': 0.05}
 QUALITY_VALUES = {'High': 0.95, 'Medium': 0.72, 'Low': 0.4, 'Unknown': 0.35}
 
@@ -87,7 +86,7 @@ def score_verification(db: Session, verification: Verification):
             reason = 'Relevant evidence was retrieved, but none was classified High or Medium by the source policy.'
         verification.score = None; verification.score_band = None; verification.coverage_pct = round(coverage * 100, 1)
         verification.evidence_status = 'No checkable factual claims' if not checkable else 'Insufficient evidence — no overall score'
-        db.add(VerificationScore(verification_id=verification.id, eligible=False, eligibility_reason=reason, formula_version=SCORE_FORMULA_VERSION, components={'coverage_pct': round(coverage * 100, 1), 'threshold_pct': round(settings.score_coverage_threshold * 100, 1)}))
+        db.add(VerificationScore(verification_id=verification.id, eligible=False, eligibility_reason=reason, components={'coverage_pct': round(coverage * 100, 1), 'threshold_pct': round(settings.score_coverage_threshold * 100, 1)}))
         return
     accuracy = 30 * sum(VERDICT_VALUES[c.verdict] * c.importance for c in valid) / sum(c.importance for c in valid)
     strength = 20 * sum(QUALITY_VALUES[e.source.quality_class] for e in quality_evidence) / len(quality_evidence)
@@ -100,7 +99,7 @@ def score_verification(db: Session, verification: Verification):
     band = 'Very High Evidence-Backed Credibility' if score >= 90 else 'High Evidence-Backed Credibility' if score >= 75 else 'Mixed Evidence-Backed Credibility' if score >= 60 else 'Low Evidence-Backed Credibility' if score >= 40 else 'Very Low Evidence-Backed Credibility'
     verification.score, verification.score_band, verification.coverage_pct = score, band, round(coverage * 100, 1)
     verification.evidence_status = 'Scored — evidence coverage sufficient'
-    db.add(VerificationScore(verification_id=verification.id, eligible=True, eligibility_reason=f'{coverage:.0%} weighted claim coverage met the {settings.score_coverage_threshold:.0%} policy threshold with qualifying source-policy evidence.', formula_version=SCORE_FORMULA_VERSION, components=components))
+    db.add(VerificationScore(verification_id=verification.id, eligible=True, eligibility_reason=f'{coverage:.0%} weighted claim coverage met the {settings.score_coverage_threshold:.0%} policy threshold with qualifying source-policy evidence.', components=components))
 
 def run_verification(db: Session, verification_id: str):
     verification = db.query(Verification).options(joinedload(Verification.claims).joinedload(Claim.evidence).joinedload(Evidence.source), joinedload(Verification.article)).filter(Verification.id == verification_id).first()
