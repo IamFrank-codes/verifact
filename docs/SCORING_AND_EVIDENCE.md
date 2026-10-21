@@ -37,12 +37,19 @@ The report exposes eligibility, formula version, coverage, and component values.
 | `nih.gov` | High | Government research institution |
 | `factcheck.org` | High | Fact-check organization |
 | `reuters.com` | Medium | Established news organization |
+| `bbc.com` | Medium | User-selected sports news organization |
+| `aljazeera.com` | Medium | User-selected sports news organization |
+| `skysports.com` | Medium | User-selected sports news organization |
 | Any unmatched domain | Unknown | Unclassified source |
 
 A domain absent from the policy is **Unknown**. Unknown does not mean false or inherently untrustworthy, but it cannot by itself satisfy the qualifying-source gate. To add a domain, update the policy with a justified classification and rationale, increment its version, and run the Academic Demo tests.
 
+The sports publishers are user-selected references for sports testing, not a topic restriction. VeriFact remains available for other topics. A source-domain match contributes Medium source quality; it does not guarantee that a specific article directly supports a claim. Absence of a claim from any selected publisher is not evidence that the claim is false.
+
 ## What the providers and model do
 
 Google Fact Check Tools searches previously published ClaimReview records; no match is not a verdict. GDELT and optional NewsAPI help discover news coverage and source links. Groq assesses the claim against the retained evidence packet and may produce a short related-news summary. VeriFact validates referenced evidence IDs and computes any eligible score itself.
+
+Google Fact Check evidence retains the exact reviewed claim, review title, and rating together. The rating applies only to the reviewed claim. If its proposition does not match the submitted claim, it must be treated as contextual, not as evidence for or against the submitted claim.
 
 If providers return no relevant, retained evidence—or if the retained sources fail the policy gate—the report remains scoreless and explains the limitation rather than inventing citations or a summary.

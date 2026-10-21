@@ -10,7 +10,45 @@ import httpx
 
 from app.ai import structured
 from app.evidence import providers
+from app.evidence.source_policy import policy
 from app.services import verification
+
+
+def test_google_factcheck_retains_exact_claim_title_and_rating(monkeypatch):
+    monkeypatch.setattr(providers, 'get_settings', lambda: SimpleNamespace(google_factcheck_key='test-key'))
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {'claims': [{
+        'text': 'COVID-19 vaccines do not reduce hospitalization.',
+        'claimReview': [{
+            'publisher': {'name': 'Example Fact Checker'},
+            'url': 'https://factcheck.example/review',
+            'reviewDate': '2026-10-20',
+            'title': 'Vaccines reduce hospitalization, contrary to this post',
+            'textualRating': 'False',
+        }],
+    }]}
+    monkeypatch.setattr(providers.httpx, 'get', lambda *args, **kwargs: response)
+
+    evidence = providers.GoogleFactCheckProvider().search('COVID-19 vaccines reduce hospitalization.')
+
+    assert len(evidence) == 1
+    assert 'Reviewed claim: “COVID-19 vaccines do not reduce hospitalization.”' in evidence[0].excerpt
+    assert 'Review title: “Vaccines reduce hospitalization, contrary to this post”' in evidence[0].excerpt
+    assert 'Review rating: “False”' in evidence[0].excerpt
+    assert 'rating applies to the reviewed claim' in evidence[0].relevance
+
+
+def test_user_selected_sports_publishers_are_medium_policy_sources():
+    for url, expected_domain in [
+        ('https://www.bbc.com/sport/football', 'bbc.com'),
+        ('https://www.aljazeera.com/sports/football', 'aljazeera.com'),
+        ('https://www.reuters.com/sports/soccer/', 'reuters.com'),
+        ('https://www.skysports.com/rugby-union', 'skysports.com'),
+    ]:
+        classified = policy.classify(url)
+        assert classified['domain'] == expected_domain
+        assert classified['quality_class'] == 'Medium'
 
 
 def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
@@ -150,6 +188,8 @@ def test_structured_assessment_requires_and_returns_source_bounded_news_summary(
     assert 'news_summary' in schema['required']
     assert 'news_summary' in schema['properties']
     assert '2-5 sentences' in captured['payload']['messages'][0]['content']
+    assert 'rating applies only to the Reviewed claim' in captured['payload']['messages'][0]['content']
+    assert 'opposite' in captured['payload']['messages'][0]['content']
 
 
 def test_structured_model_rate_limit_has_safe_diagnostic(monkeypatch):

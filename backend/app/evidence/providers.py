@@ -40,7 +40,16 @@ class GoogleFactCheckProvider:
             for review in item.get('claimReview', [])[:2]:
                 url = review.get('url')
                 if url:
-                    output.append(EvidenceItem(review.get('publisher', {}).get('name', 'Fact-check publisher'), url, review.get('reviewDate'), review.get('textualRating', 'Fact-check record available.'), 'contextual', 'A third-party fact-check record was retrieved for comparison.', self.name))
+                    reviewed_claim = ' '.join((item.get('text') or '').split())
+                    review_title = ' '.join((review.get('title') or '').split())
+                    rating = ' '.join((review.get('textualRating') or 'Fact-check record available.').split())
+                    parts = []
+                    if reviewed_claim:
+                        parts.append(f'Reviewed claim: “{reviewed_claim}”')
+                    if review_title:
+                        parts.append(f'Review title: “{review_title}”')
+                    parts.append(f'Review rating: “{rating}”')
+                    output.append(EvidenceItem(review.get('publisher', {}).get('name', 'Fact-check publisher'), url, review.get('reviewDate'), ' '.join(parts), 'contextual', 'A third-party fact-check record was retrieved; its rating applies to the reviewed claim shown in the excerpt and must be matched to the submitted claim before use.', self.name))
         return output
 
 

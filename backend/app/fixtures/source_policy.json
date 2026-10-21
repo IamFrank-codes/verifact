@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "default": {
     "rule": "default_unknown",
     "source_type": "Unknown",
@@ -11,7 +11,10 @@
     {"domain": "who.int", "rule": "who_international_organization", "source_type": "International organization", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured World Health Organization domain rule."},
     {"domain": "cdc.gov", "rule": "cdc_government_health", "source_type": "Government agency", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured United States public health agency domain rule."},
     {"domain": "nih.gov", "rule": "nih_government_research", "source_type": "Government research institution", "quality_class": "High", "weight": 0.95, "rationale": "Matches the configured National Institutes of Health domain rule."},
-    {"domain": "reuters.com", "rule": "reuters_established_news", "source_type": "Established news organization", "quality_class": "Medium", "weight": 0.78, "rationale": "Matches the configured Reuters publisher domain rule; this is a policy classification, not a guarantee."},
+    {"domain": "reuters.com", "rule": "reuters_established_news", "source_type": "Established news organization", "quality_class": "Medium", "weight": 0.78, "rationale": "Matches the user-selected Reuters domain, including its sports coverage; this is a policy classification, not a guarantee."},
+    {"domain": "bbc.com", "rule": "bbc_sport_user_selected", "source_type": "Sports news organization", "quality_class": "Medium", "weight": 0.75, "rationale": "User-selected BBC Sport source for sports testing; publisher classification is not a guarantee that an individual report is accurate."},
+    {"domain": "aljazeera.com", "rule": "aljazeera_sport_user_selected", "source_type": "Sports news organization", "quality_class": "Medium", "weight": 0.75, "rationale": "User-selected Al Jazeera Sports source for sports testing; publisher classification is not a guarantee that an individual report is accurate."},
+    {"domain": "skysports.com", "rule": "sky_sports_user_selected", "source_type": "Sports news organization", "quality_class": "Medium", "weight": 0.75, "rationale": "User-selected Sky Sports source for sports testing; publisher classification is not a guarantee that an individual report is accurate."},
     {"domain": "factcheck.org", "rule": "factcheck_org", "source_type": "Fact-check organization", "quality_class": "High", "weight": 0.88, "rationale": "Matches the configured FactCheck.org domain rule."}
   ]
 }
