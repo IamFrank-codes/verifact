@@ -11,6 +11,8 @@ type Verification = {id:string; input_type:string; original_input:string; status
 type Stats = {total:number; average_score:number|null; scored_reports:number; insufficient_evidence_reports:number}
 
 const API_TIMEOUT_MS = 15_000
+// Registration may synchronously attempt SMTP delivery (bounded to 20 seconds).
+const SIGNUP_TIMEOUT_MS = 45_000
 const VERIFY_SUBMISSION_TIMEOUT_MS = 120_000
 const api = async <T,>(path:string, options:RequestInit = {}, timeoutMs=API_TIMEOUT_MS):Promise<T> => {
   const controller = new AbortController()
@@ -53,7 +55,7 @@ function Login({onLogin, go}:{onLogin:(u:User)=>void;go:(route:string)=>void}){
 function Signup({onLogin,go}:{onLogin:(u:User)=>void;go:(r:string)=>void}){
   const [form,setForm]=useState({full_name:'',email:'',password:'',confirm_password:''});const [error,setError]=useState('');const [busy,setBusy]=useState(false)
   const update=(field:keyof typeof form,value:string)=>setForm({...form,[field]:value})
-  async function submit(e:FormEvent){e.preventDefault();if(form.password!==form.confirm_password){setError('The passwords are not the same.');return}setBusy(true);setError('');try{const r=await api<{user:User}>('/api/v1/auth/register',{method:'POST',body:JSON.stringify(form)});onLogin(r.user);go('/dashboard')}catch(err){setError((err as Error).message)}finally{setBusy(false)}}
+  async function submit(e:FormEvent){e.preventDefault();if(form.password!==form.confirm_password){setError('The passwords are not the same.');return}setBusy(true);setError('');try{const r=await api<{user:User}>('/api/v1/auth/register',{method:'POST',body:JSON.stringify(form)},SIGNUP_TIMEOUT_MS);onLogin(r.user);go('/dashboard')}catch(err){setError((err as Error).message)}finally{setBusy(false)}}
   return <AuthShell><Brand compact/><div className="auth-heading"><p className="eyebrow">CREATE YOUR WORKSPACE</p><h2>Start verifying with evidence.</h2><p>VeriFact stores your reports privately unless you decide to share them.</p></div><form onSubmit={submit} className="form-stack"><label>Full name<input value={form.full_name} onChange={e=>update('full_name',e.target.value)} required autoComplete="name"/></label><label>Email address<input value={form.email} onChange={e=>update('email',e.target.value)} type="email" required autoComplete="email"/></label><label>Password<input value={form.password} onChange={e=>update('password',e.target.value)} type="password" required autoComplete="new-password"/><small>At least 10 characters with uppercase, lowercase, and a number.</small></label><label>Confirm password<input value={form.confirm_password} onChange={e=>update('confirm_password',e.target.value)} type="password" required autoComplete="new-password"/></label>{error&&<Notice kind="error">{error}</Notice>}<Button disabled={busy}>{busy?'Creating workspace…':'Create VeriFact account'}</Button></form><div className="auth-links"><span>Already have an account? <button onClick={()=>go('/login')}>Sign in</button></span></div></AuthShell>
 }
 function Forgot({go}:{go:(r:string)=>void}){
