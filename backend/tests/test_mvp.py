@@ -16,9 +16,28 @@ def setup_module():
     Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)
 
 def auth_client(email='verifier@example.com'):
+    main_module.limiter._storage.reset()
     response = client.post('/api/v1/auth/register', json={'full_name': 'VeriFact Tester', 'email': email, 'password': 'StrongPass2026', 'confirm_password': 'StrongPass2026'})
     assert response.status_code == 201
     return client
+
+def test_signup_auto_login_survives_verification_email_failure(monkeypatch):
+    main_module.limiter._storage.reset()
+    monkeypatch.setattr(main_module.settings, 'mode', 'academic-demo')
+    def fail_email(_email, _token):
+        raise RuntimeError('SMTP unavailable')
+    monkeypatch.setattr(main_module, 'send_email_verification_email', fail_email)
+    response = client.post('/api/v1/auth/register', json={
+        'full_name': 'Signup Auto Login',
+        'email': 'signup-auto-login@example.com',
+        'password': 'StrongPass2026',
+        'confirm_password': 'StrongPass2026',
+    })
+    assert response.status_code == 201
+    assert response.json()['verification_email_sent'] is False
+    assert 'access_token' in response.cookies
+    assert client.get('/api/v1/auth/me').json()['user']['email'] == 'signup-auto-login@example.com'
+    monkeypatch.setattr(main_module.settings, 'mode', 'local-fixture')
 
 def test_scored_fixture_report():
     auth_client()

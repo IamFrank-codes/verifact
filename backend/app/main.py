@@ -150,26 +150,27 @@ def register(request: Request, payload: RegisterInput, response: Response, db: S
         raise HTTPException(status_code=422, detail='Passwords do not match.')
     if db.query(User).filter(User.email == payload.email.lower()).first():
         raise HTTPException(status_code=409, detail='An account with this email already exists.')
-    user = User(full_name=payload.full_name.strip(), email=payload.email.lower(), password_hash=hash_password(payload.password))
+    user = User(full_name=payload.full_name.strip(), email=payload.email.lower(), password_hash=hash_password(payload.password), email_verified=settings.mode == 'local-fixture')
     db.add(user); db.commit(); db.refresh(user)
-    if settings.mode == 'local-fixture':
-        user.email_verified = True
-        db.commit()
-        token = create_access_token(user.id)
-        response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
-        return {'user': user_out(user)}
-    raw_token, hashed_token = new_reset_token()
-    db.add(EmailVerificationToken(user_id=user.id, token_hash=hashed_token, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
-    db.commit()
-    verification_email_sent = True
-    try:
-        send_email_verification_email(user.email, raw_token)
-    except Exception:
-        verification_email_sent = False
-        logger.exception('Account created but verification email delivery failed')
+    # Successful account creation should establish the session immediately;
+    # optional verification-email setup must not turn signup into a false error.
     token = create_access_token(user.id)
     response.set_cookie('access_token', token, httponly=True, secure=settings.secure_cookies, samesite='lax', max_age=settings.access_token_minutes * 60, path='/')
-    return {'user': user_out(user), 'message': 'Account created. Check your email to verify your account.', 'verification_email_sent': verification_email_sent}
+    if settings.mode == 'local-fixture':
+        return {'user': user_out(user)}
+    verification_email_sent = False
+    message = 'Account created and signed in. Email verification could not be prepared; you can continue using VeriFact.'
+    try:
+        raw_token, hashed_token = new_reset_token()
+        db.add(EmailVerificationToken(user_id=user.id, token_hash=hashed_token, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
+        db.commit()
+        send_email_verification_email(user.email, raw_token)
+        verification_email_sent = True
+        message = 'Account created and signed in. Check your email to verify your account.'
+    except Exception:
+        db.rollback()
+        logger.exception('Account created and signed in, but verification setup or email delivery failed')
+    return {'user': user_out(user), 'message': message, 'verification_email_sent': verification_email_sent}
 
 
 @app.post('/api/v1/auth/login')
