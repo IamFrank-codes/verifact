@@ -46,10 +46,14 @@ A domain absent from the policy is **Unknown**. Unknown does not mean false or i
 
 The sports publishers are user-selected references for sports testing, not a topic restriction. VeriFact remains available for other topics. A source-domain match contributes Medium source quality; it does not guarantee that a specific article directly supports a claim. Absence of a claim from any selected publisher is not evidence that the claim is false.
 
+To test these outlets as search sources, set `VERIFACT_SPORTS_SOURCE_SEARCH_ENABLED=true`. VeriFact then runs bounded Bing News RSS searches with a separate `site:` restriction for each selected domain, unwraps Bing's redirect link, and discards results whose final URL is outside that publisher's allowed domain. The saved evidence URL points to the publisher, not Bing. The report groups these searches into one Bing News RSS retrieval entry; individual evidence records still name their publisher. This optional path supplements Google Fact Check Tools, GDELT, and NewsAPI; it does not replace general-topic searches. Search results can be incomplete or blocked by the index, so zero results means “not found by this search,” not “false.”
+
 ## What the providers and model do
 
 Google Fact Check Tools searches previously published ClaimReview records; no match is not a verdict. GDELT and optional NewsAPI help discover news coverage and source links. Groq assesses the claim against the retained evidence packet and may produce a short related-news summary. VeriFact validates referenced evidence IDs and computes any eligible score itself.
 
 Google Fact Check evidence retains the exact reviewed claim, review title, and rating together. The rating applies only to the reviewed claim. If its proposition does not match the submitted claim, it must be treated as contextual, not as evidence for or against the submitted claim.
+
+For time-sensitive sports results, the assessor is instructed to use publication dates and separate historical events from later changes in status. An appeal being resolved later, for example, does not undo the fact that the appeal was filed earlier.
 
 If providers return no relevant, retained evidence—or if the retained sources fail the policy gate—the report remains scoreless and explains the limitation rather than inventing citations or a summary.

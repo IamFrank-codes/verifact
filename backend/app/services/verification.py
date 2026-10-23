@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import httpx
 from sqlalchemy.orm import Session, joinedload
 from app.models import Article, Claim, Evidence, ProviderRun, Source, Verification, VerificationScore
 from app.core.config import get_settings
 from app.evidence.source_policy import policy
-from app.evidence.providers import enabled_external_providers, EvidenceItem
+from app.evidence.providers import enabled_external_providers, EvidenceItem, BingSportsOutletProvider
 from app.fixtures.deterministic import find_fixture, generic_claim
 from app.services.extraction import extract_article, ExtractionError
 from app.ai.structured import analyze_evidence, is_enabled, EvidenceAnalysisError
@@ -111,7 +112,7 @@ def run_verification(db: Session, verification_id: str):
             article_title = article_data.get('title')
             article = Article(url=article_data['url'], title=article_title, author=article_data.get('author'), publisher=article_data.get('publisher'), published_at=article_data.get('published_at'), extracted_text=article_data['text'], extraction_status='complete')
             db.add(article); db.flush(); verification.article_id = article.id; verification.article = article; content = article_data['text']; db.commit()
-        should_search_live_sources = settings.live_provider_mode or verification.input_type == 'url'
+        should_search_live_sources = settings.live_provider_mode or verification.input_type == 'url' or settings.sports_source_search_enabled
         providers = enabled_external_providers() if should_search_live_sources else []
         use_live_sources = settings.live_provider_mode or bool(providers)
         set_stage(db, verification, 'Identifying factual claims')
@@ -125,16 +126,38 @@ def run_verification(db: Session, verification_id: str):
         search_query = evidence_search_query(verification.input_type, claim.text, content, article_title)
         items = list(result['evidence'])
         if should_search_live_sources and not providers:
-            message = 'No live evidence providers are configured for this URL. Configure GDELT, Google Fact Check Tools, or NewsAPI to retrieve external records.'
+            message = 'No live evidence providers are configured for this URL. Configure Google Fact Check Tools, GDELT, or NewsAPI, or enable selected sports-source search for sports testing.'
             if settings.live_provider_mode:
                 message += ' VeriFact did not use fixture evidence.'
             db.add(ProviderRun(verification_id=verification.id, provider='Live evidence providers', status='unavailable', message=message))
-        for provider in providers:
-            try:
-                found = provider.search(search_query); items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned for the article search.'))
-            except Exception as exc:
-                logger.warning('Evidence provider %s failed (%s)', provider.name, type(exc).__name__)
-                db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message=provider_failure_message(provider.name, exc)))
+        sports_providers = [provider for provider in providers if isinstance(provider, BingSportsOutletProvider)]
+        sports_successes = []
+        sports_failures = []
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            sports_searches = {provider: executor.submit(provider.search, search_query) for provider in sports_providers}
+            for provider in providers:
+                if provider in sports_searches:
+                    try:
+                        found = sports_searches[provider].result()
+                        items.extend(found)
+                        sports_successes.append(found)
+                    except Exception as exc:
+                        sports_failures.append(exc)
+                        logger.warning('Evidence provider %s failed (%s)', provider.name, type(exc).__name__)
+                    continue
+                try:
+                    found = provider.search(search_query)
+                    items.extend(found); db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='success', message=f'{len(found)} record(s) returned for the article search.'))
+                except Exception as exc:
+                    logger.warning('Evidence provider %s failed (%s)', provider.name, type(exc).__name__)
+                    db.add(ProviderRun(verification_id=verification.id, provider=provider.name, status='unavailable', message=provider_failure_message(provider.name, exc)))
+        if sports_providers:
+            record_count = sum(len(found) for found in sports_successes)
+            status = 'unavailable' if not sports_successes else 'partial' if sports_failures else 'success'
+            message = f'Searched {len(sports_providers)} selected sports outlets; {record_count} record(s) returned.'
+            if sports_failures:
+                message += f' {len(sports_failures)} outlet search(es) unavailable.'
+            db.add(ProviderRun(verification_id=verification.id, provider=BingSportsOutletProvider.retrieval_name, status=status, message=message))
         for item in items:
             create_evidence(db, claim, item, fixture=bool(use_fixture and item.provider == 'VeriFact local fixture'))
         db.commit()

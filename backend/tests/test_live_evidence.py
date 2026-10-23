@@ -51,6 +51,62 @@ def test_user_selected_sports_publishers_are_medium_policy_sources():
         assert classified['quality_class'] == 'Medium'
 
 
+def test_bing_sports_search_unwraps_and_domain_validates_results(monkeypatch):
+    xml = '''<rss><channel>
+      <item><title>Updated Mudryk status - Sky Sports</title>
+        <link>https://www.bing.com/news/apiclick.aspx?url=https%3A%2F%2Fwww.skysports.com%2Ffootball%2Fnews%2Fmudryk-update</link>
+        <description><![CDATA[The appeal was resolved and the player may return.]]></description>
+        <pubDate>Fri, 31 Jul 2026 12:00:00 GMT</pubDate>
+      </item>
+      <item><title>Chelsea transfer update</title>
+        <link>https://www.bing.com/news/apiclick.aspx?url=https%3A%2F%2Fwww.skysports.com%2Ffootball%2Fnews%2Fchelsea-transfer</link>
+        <description>Another Chelsea signing was announced.</description>
+      </item>
+      <item><title>Unapproved domain</title><link>https://www.bing.com/news/apiclick.aspx?url=https%3A%2F%2Fexample.com%2Fstory</link>
+        <description>Must not be retained.</description></item>
+    </channel></rss>'''
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.content = xml.encode()
+    captured = {}
+
+    def fake_get(url, *, params, timeout, headers):
+        captured.update(url=url, params=params, timeout=timeout)
+        return response
+
+    monkeypatch.setattr(providers.httpx, 'get', fake_get)
+    monkeypatch.setattr(providers, 'extract_article', lambda url: {
+        'url': url,
+        'title': 'Updated Mudryk status',
+        'published_at': '2026-07-31',
+        'text': 'The full publisher article says the appeal was filed earlier and resolved in July. ' * 20,
+    })
+    results = providers.BingSportsOutletProvider('skysports.com').search('Mykhailo Mudryk appeal')
+
+    assert captured['url'] == 'https://www.bing.com/news/search'
+    assert captured['params']['format'] == 'rss'
+    assert 'site:skysports.com' in captured['params']['q']
+    assert providers.BingSportsOutletProvider._search_query('Mykhailo Mudryk: Chelsea winger to appeal against four-year ban for doping offence') == 'mykhailo mudryk chelsea doping ban'
+    assert captured['timeout'] == 8
+    assert len(results) == 1
+    assert results[0].url == 'https://www.skysports.com/football/news/mudryk-update'
+    assert results[0].name == 'Sky Sports'
+    assert results[0].published_at == '2026-07-31'
+    assert 'full publisher article says' in results[0].excerpt
+    assert results[0].relationship_type == 'contextual'
+
+
+def test_selected_sports_search_is_opt_in(monkeypatch):
+    settings = SimpleNamespace(google_factcheck_key=None, gdelt_enabled=False, newsapi_key=None, sports_source_search_enabled=True)
+    monkeypatch.setattr(providers, 'get_settings', lambda: settings)
+
+    selected = providers.enabled_external_providers()
+
+    assert [p.domain for p in selected] == ['bbc.com', 'aljazeera.com', 'reuters.com', 'skysports.com']
+    settings.sports_source_search_enabled = False
+    assert providers.enabled_external_providers() == []
+
+
 def test_gdelt_retains_source_link_and_bounded_article_text(monkeypatch):
     response = Mock()
     response.raise_for_status = Mock()
@@ -190,6 +246,7 @@ def test_structured_assessment_requires_and_returns_source_bounded_news_summary(
     assert '2-5 sentences' in captured['payload']['messages'][0]['content']
     assert 'rating applies only to the Reviewed claim' in captured['payload']['messages'][0]['content']
     assert 'opposite' in captured['payload']['messages'][0]['content']
+    assert 'distinguish a historical event from its later outcome or current status' in captured['payload']['messages'][0]['content']
 
 
 def test_structured_model_rate_limit_has_safe_diagnostic(monkeypatch):

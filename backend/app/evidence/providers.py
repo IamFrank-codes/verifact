@@ -3,8 +3,13 @@ from datetime import datetime, timezone
 from threading import Lock
 from time import monotonic, sleep
 from typing import Protocol
+from datetime import timezone
+from email.utils import parsedate_to_datetime
+from html import unescape
 import re
+import xml.etree.ElementTree as ET
 import httpx
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from app.core.config import get_settings
 from app.services.extraction import extract_article
 
@@ -168,6 +173,122 @@ class NewsAPIProvider:
         return [EvidenceItem(x.get('source', {}).get('name', 'News source'), x['url'], x.get('publishedAt'), x.get('description') or x.get('title') or 'Relevant article available.', 'contextual', 'A news-search result was retrieved for contextual comparison.', self.name) for x in response.json().get('articles', []) if x.get('url')]
 
 
+class BingSportsOutletProvider:
+    """Search one user-selected sports outlet through Bing News RSS, not its entire web domain."""
+    retrieval_name = 'Bing News RSS'
+    name = 'Bing News RSS'
+    outlets = {
+        'bbc.com': 'BBC Sport',
+        'aljazeera.com': 'Al Jazeera Sports',
+        'reuters.com': 'Reuters Sports',
+        'skysports.com': 'Sky Sports',
+    }
+    stop_words = {'the', 'and', 'for', 'with', 'from', 'against', 'after', 'before', 'into', 'onto', 'over', 'under', 'to', 'of', 'in', 'on', 'at', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'do', 'does', 'did', 'their', 'his', 'her', 'its', 'who', 'what', 'when', 'where', 'why', 'how'}
+    sports_terms = ('doping', 'ban', 'appeal', 'injury', 'transfer', 'suspension', 'cleared', 'return', 'goal', 'goals', 'scored', 'score', 'won', 'win', 'beat', 'defeated', 'loss', 'final', 'title', 'champion', 'champions', 'league', 'cup', 'rugby', 'football', 'soccer', 'tennis', 'race', 'medal', 'record', 'signed', 'coach', 'manager', 'match', 'tournament', 'olympic')
+
+    def __init__(self, domain: str):
+        if domain not in self.outlets:
+            raise ValueError('Unsupported sports publisher domain.')
+        self.domain = domain
+        self.name = f'Bing News RSS ({self.outlets[domain]})'
+
+    @classmethod
+    def _search_query(cls, claim: str) -> str:
+        words = re.findall(r'[A-Za-z0-9]+', claim)
+        useful = []
+        for word in words:
+            normalized = word.casefold()
+            if len(normalized) >= 3 and normalized not in cls.stop_words and normalized not in useful:
+                useful.append(normalized)
+        subject = useful[:3]
+        topic = [term for term in cls.sports_terms if term in useful and term not in subject][:2]
+        return ' '.join(subject + topic) or ' '.join(words[:12])
+
+    @staticmethod
+    def _text(element: ET.Element | None) -> str:
+        if element is None or element.text is None:
+            return ''
+        return ' '.join(re.sub(r'<[^>]+>', ' ', unescape(element.text)).split())
+
+    @staticmethod
+    def _published(value: str) -> str | None:
+        if not value:
+            return None
+        try:
+            parsed = parsedate_to_datetime(value)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc).isoformat()
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    @staticmethod
+    def _excerpt(text: str, limit: int = 1200) -> str:
+        text = ' '.join(text.split())
+        return text if len(text) <= limit else text[:limit].rsplit(' ', 1)[0].rstrip() + '…'
+
+    def _publisher_url(self, link: str) -> str | None:
+        parsed = urlparse(link)
+        candidate = parse_qs(parsed.query).get('url', [None])[0] if parsed.hostname in {'bing.com', 'www.bing.com'} else link
+        if not candidate:
+            return None
+        target = urlparse(candidate)
+        host = (target.hostname or '').lower().removeprefix('www.')
+        if target.scheme not in {'http', 'https'} or not (host == self.domain or host.endswith('.' + self.domain)):
+            return None
+        if target.username or target.password or not target.path:
+            return None
+        return urlunparse(('https', target.netloc, target.path, target.params, target.query, ''))
+
+    def search(self, claim: str) -> list[EvidenceItem]:
+        query = f'{self._search_query(claim)} site:{self.domain}'
+        response = httpx.get(
+            'https://www.bing.com/news/search',
+            params={'q': query, 'format': 'rss'},
+            timeout=8,
+            headers={'User-Agent': 'VeriFact/1.0 (sports evidence search)'},
+        )
+        response.raise_for_status()
+        if len(response.content) > 1_000_000:
+            raise ValueError('Sports news RSS response exceeded the processing limit.')
+        root = ET.fromstring(response.content)
+        output = []
+        query_terms = set(self._search_query(claim).split())
+        for node in root.findall('./channel/item')[:10]:
+            title = self._text(node.find('title'))
+            description = self._text(node.find('description'))
+            url = self._publisher_url(self._text(node.find('link')))
+            if not url or not title:
+                continue
+            result_terms = set(re.findall(r'[a-z0-9]+', f'{title} {description}'.casefold()))
+            if len(query_terms & result_terms) < min(2, len(query_terms)):
+                continue
+            excerpt = f'{title}. {description}'.strip() if description else title
+            published_at = self._published(self._text(node.find('pubDate')))
+            try:
+                article = extract_article(url)
+                final_url = self._publisher_url(article.get('url') or url)
+                article_text = (article.get('text') or '').strip()
+                if final_url and article_text:
+                    url = final_url
+                    excerpt = self._excerpt(article_text)
+                    published_at = article.get('published_at') or published_at
+            except Exception:
+                # Keep the validated publisher link and RSS snippet if article text is blocked.
+                pass
+            output.append(EvidenceItem(
+                self.outlets[self.domain],
+                url,
+                published_at,
+                excerpt[:1200],
+                'contextual',
+                'A domain-restricted sports-news result was retrieved. Confirm that its headline and excerpt directly address the submitted claim before using it as support or contradiction.',
+                self.retrieval_name,
+            ))
+            break
+        return output
+
+
 def enabled_external_providers() -> list[EvidenceProvider]:
     settings = get_settings()
     providers: list[EvidenceProvider] = []
@@ -177,4 +298,6 @@ def enabled_external_providers() -> list[EvidenceProvider]:
         providers.append(GDELTProvider())
     if settings.newsapi_key:
         providers.append(NewsAPIProvider())
+    if settings.sports_source_search_enabled:
+        providers.extend(BingSportsOutletProvider(domain) for domain in BingSportsOutletProvider.outlets)
     return providers

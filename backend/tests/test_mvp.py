@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 import app.main as main_module
 from app.ai.structured import EvidenceAssessment
-from app.evidence.providers import EvidenceItem
+from app.evidence.providers import BingSportsOutletProvider, EvidenceItem
 from app.services import email as email_service
 from app.services import verification as verification_service
 from app.db import Base, engine
@@ -169,6 +169,48 @@ def test_live_report_includes_retained_source_and_model_news_summary(monkeypatch
     assert report['summary'].startswith('Related news summary:\nThe retrieved source reports relevant context')
     assert report['claims'][0]['evidence'][0]['source']['url'] == 'https://news.example/article'
     assert report['claims'][0]['evidence'][0]['excerpt'] == 'Article excerpt with directly relevant reporting.'
+
+
+def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
+    auth_client('bing-aggregate@example.com')
+    for settings in (main_module.settings, verification_service.settings):
+        monkeypatch.setattr(settings, 'mode', 'academic-demo')
+        monkeypatch.setattr(settings, 'inline_processing', True)
+
+    outlets = [BingSportsOutletProvider(domain) for domain in BingSportsOutletProvider.outlets]
+
+    def fake_search(query, provider):
+        if provider.domain == 'aljazeera.com':
+            raise RuntimeError('outlet unavailable')
+        if provider.domain == 'bbc.com':
+            return [EvidenceItem('BBC Sport', 'https://www.bbc.com/sport/football/claim', '2026-10-18', 'BBC reports on the event.', 'contextual', 'Direct sports coverage.', provider.retrieval_name)]
+        if provider.domain == 'reuters.com':
+            return [EvidenceItem('Reuters Sports', 'https://www.reuters.com/sports/claim', '2026-10-19', 'Reuters reports on the event.', 'contextual', 'Direct sports coverage.', provider.retrieval_name)]
+        return []
+
+    for provider in outlets:
+        monkeypatch.setattr(provider, 'search', lambda query, p=provider: fake_search(query, p))
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: outlets)
+    monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
+    monkeypatch.setattr(verification_service, 'analyze_evidence', lambda _text, packet: EvidenceAssessment(
+        verdict='Mostly Supported',
+        explanation='The retained sports articles support the test claim.',
+        news_summary='Two selected sports publishers report on the event.',
+        supporting_ids=[item['id'] for item in packet],
+        contradicting_ids=[],
+        contextual_ids=[],
+        freshness_note='The records are recent.',
+    ))
+
+    response = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A sports result covered by multiple publishers.'})
+    assert response.status_code == 202
+    report = response.json()['report']
+    bing_runs = [item for item in report['provider_runs'] if item['provider'] == 'Bing News RSS']
+    assert len(bing_runs) == 1
+    assert bing_runs[0]['status'] == 'partial'
+    assert bing_runs[0]['message'] == 'Searched 4 selected sports outlets; 2 record(s) returned. 1 outlet search(es) unavailable.'
+    assert {item['source']['name'] for item in report['claims'][0]['evidence']} == {'BBC Sport', 'Reuters Sports'}
+    assert {item['provider'] for item in report['claims'][0]['evidence']} == {'Bing News RSS'}
 
 
 def test_url_submission_searches_with_extracted_article_title(monkeypatch):

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     google_factcheck_key: str | None = None
     newsapi_key: str | None = None
     gdelt_enabled: bool = False
+    sports_source_search_enabled: bool = False
     local_real_api_mode: bool = False
     inline_processing: bool = False
     openai_api_key: str | None = None
