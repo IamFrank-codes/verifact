@@ -65,6 +65,8 @@ The template enables GDELT by default. GDELT does not require an API key and ask
 
 NewsAPI is optional. Set `VERIFACT_NEWSAPI_KEY` only if you have a key and have reviewed the provider's current plan limits and terms.
 
+In academic-demo mode, claims that are clearly sports-related automatically search BBC Sport, Al Jazeera Sports, Reuters Sports, and Sky Sports through Bing News RSS. This includes common sport names and terms such as Messi or Ballon d'Or. Set `VERIFACT_SPORTS_SOURCE_SEARCH_ENABLED=true` if you want those outlets searched for non-sports claims too. No Bing API key is required.
+
 ### Email, if needed
 
 SMTP is only needed to test real account-verification and password-reset delivery. Configure the `VERIFACT_SMTP_*` settings in `backend/.env`; do not use a personal email password.

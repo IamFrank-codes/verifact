@@ -114,6 +114,8 @@ def run_verification(db: Session, verification_id: str):
             db.add(article); db.flush(); verification.article_id = article.id; verification.article = article; content = article_data['text']; db.commit()
         should_search_live_sources = settings.live_provider_mode or verification.input_type == 'url' or settings.sports_source_search_enabled
         providers = enabled_external_providers() if should_search_live_sources else []
+        if settings.mode == 'academic-demo' and not settings.sports_source_search_enabled and BingSportsOutletProvider.is_sports_related(content):
+            providers.extend(BingSportsOutletProvider(domain) for domain in BingSportsOutletProvider.outlets)
         use_live_sources = settings.live_provider_mode or bool(providers)
         set_stage(db, verification, 'Identifying factual claims')
         use_fixture = not use_live_sources and (settings.mode == 'local-fixture' or (settings.mode == 'hybrid' and not settings.local_real_api_mode))

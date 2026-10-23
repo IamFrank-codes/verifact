@@ -176,10 +176,9 @@ def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
     for settings in (main_module.settings, verification_service.settings):
         monkeypatch.setattr(settings, 'mode', 'academic-demo')
         monkeypatch.setattr(settings, 'inline_processing', True)
+        monkeypatch.setattr(settings, 'sports_source_search_enabled', False)
 
-    outlets = [BingSportsOutletProvider(domain) for domain in BingSportsOutletProvider.outlets]
-
-    def fake_search(query, provider):
+    def fake_search(provider, query):
         if provider.domain == 'aljazeera.com':
             raise RuntimeError('outlet unavailable')
         if provider.domain == 'bbc.com':
@@ -188,9 +187,8 @@ def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
             return [EvidenceItem('Reuters Sports', 'https://www.reuters.com/sports/claim', '2026-10-19', 'Reuters reports on the event.', 'contextual', 'Direct sports coverage.', provider.retrieval_name)]
         return []
 
-    for provider in outlets:
-        monkeypatch.setattr(provider, 'search', lambda query, p=provider: fake_search(query, p))
-    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: outlets)
+    monkeypatch.setattr(BingSportsOutletProvider, 'search', fake_search)
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: [])
     monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
     monkeypatch.setattr(verification_service, 'analyze_evidence', lambda _text, packet: EvidenceAssessment(
         verdict='Mostly Supported',
@@ -202,7 +200,7 @@ def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
         freshness_note='The records are recent.',
     ))
 
-    response = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A sports result covered by multiple publishers.'})
+    response = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': "Messi is nominated for the Ballon d'Or for the 13th time in history."})
     assert response.status_code == 202
     report = response.json()['report']
     bing_runs = [item for item in report['provider_runs'] if item['provider'] == 'Bing News RSS']
@@ -211,6 +209,7 @@ def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
     assert bing_runs[0]['message'] == 'Searched 4 selected sports outlets; 2 record(s) returned. 1 outlet search(es) unavailable.'
     assert {item['source']['name'] for item in report['claims'][0]['evidence']} == {'BBC Sport', 'Reuters Sports'}
     assert {item['provider'] for item in report['claims'][0]['evidence']} == {'Bing News RSS'}
+    assert not BingSportsOutletProvider.is_sports_related('WHO guidance on preventing abuse of older people.')
 
 
 def test_url_submission_searches_with_extracted_article_title(monkeypatch):

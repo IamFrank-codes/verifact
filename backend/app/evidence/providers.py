@@ -185,6 +185,15 @@ class BingSportsOutletProvider:
     }
     stop_words = {'the', 'and', 'for', 'with', 'from', 'against', 'after', 'before', 'into', 'onto', 'over', 'under', 'to', 'of', 'in', 'on', 'at', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'do', 'does', 'did', 'their', 'his', 'her', 'its', 'who', 'what', 'when', 'where', 'why', 'how'}
     sports_terms = ('doping', 'ban', 'appeal', 'injury', 'transfer', 'suspension', 'cleared', 'return', 'goal', 'goals', 'scored', 'score', 'won', 'win', 'beat', 'defeated', 'loss', 'final', 'title', 'champion', 'champions', 'league', 'cup', 'rugby', 'football', 'soccer', 'tennis', 'race', 'medal', 'record', 'signed', 'coach', 'manager', 'match', 'tournament', 'olympic')
+    sports_topic_markers = {'sport', 'sports', 'football', 'soccer', 'rugby', 'tennis', 'cricket', 'basketball', 'baseball', 'hockey', 'volleyball', 'golf', 'boxing', 'mma', 'ufc', 'cycling', 'swimming', 'athletics', 'wrestling', 'badminton', 'f1', 'formula1', 'fifa', 'uefa', 'olympic', 'olympics', 'messi', 'ronaldo', 'ballon', 'nba', 'nfl', 'mlb', 'nhl', 'wimbledon', 'nascar'}
+
+    @classmethod
+    def is_sports_related(cls, text: str) -> bool:
+        words = re.findall(r'[a-z0-9]+', text.casefold())
+        if set(words) & cls.sports_topic_markers:
+            return True
+        normalized = ' '.join(words)
+        return any(phrase in normalized for phrase in ('world cup', 'champions league', 'premier league', 'ballon d or', 'formula one', 'grand slam'))
 
     def __init__(self, domain: str):
         if domain not in self.outlets:
