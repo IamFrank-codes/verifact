@@ -20,3 +20,7 @@ Run these checks with the private provider credentials configured in `backend/.e
 8. If email is enabled, test account verification and password reset using a dedicated test account.
 
 No live provider request was made as part of the documentation/profile update, so these results do not certify the credentials, quotas, or current reachability of external services. Provider outcomes depend on network availability, enabled services, the submitted claim, and source-policy coverage.
+
+## Source-policy update validation — 2026-10-30
+
+After adding the configured sports-publisher source-policy rules and URL path scoping, the complete backend pytest suite passed: **31 passed**. The focused regression tests covered all nine requested publishers and confirmed that Reuters general-news pages and non-sports Guardian paths do not inherit the sports classification. The run used local tests and mocked integrations; no live news-provider, model-provider, or SMTP request was made. The frontend build and production migration workflow were not re-run for this policy-only update.

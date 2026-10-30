@@ -39,16 +39,29 @@ def test_google_factcheck_retains_exact_claim_title_and_rating(monkeypatch):
     assert 'rating applies to the reviewed claim' in evidence[0].relevance
 
 
-def test_user_selected_sports_publishers_are_medium_policy_sources():
-    for url, expected_domain in [
-        ('https://www.bbc.com/sport/football', 'bbc.com'),
-        ('https://www.aljazeera.com/sports/football', 'aljazeera.com'),
-        ('https://www.reuters.com/sports/soccer/', 'reuters.com'),
-        ('https://www.skysports.com/rugby-union', 'skysports.com'),
-    ]:
+def test_user_selected_sports_publishers_use_configured_policy_classes():
+    cases = [
+        ('https://www.reuters.com/sports/soccer/', 'reuters.com', 'High'),
+        ('https://apnews.com/sports/soccer/story', 'apnews.com', 'High'),
+        ('https://www.espn.com/nba/story', 'espn.com', 'High'),
+        ('https://www.skysports.com/football/news/story', 'skysports.com', 'High'),
+        ('https://www.theathletic.com/football/2026/10/30/story/', 'theathletic.com', 'High'),
+        ('https://www.supersport.com/rugby/news/story', 'supersport.com', 'High'),
+        ('https://www.theguardian.com/sport/2026/oct/30/story', 'theguardian.com', 'High'),
+        ('https://www.cbssports.com/nfl/news/story/', 'cbssports.com', 'High'),
+        ('https://olympics.com/en/news/official-results', 'olympics.com', 'High'),
+    ]
+    for url, expected_domain, expected_class in cases:
         classified = policy.classify(url)
         assert classified['domain'] == expected_domain
-        assert classified['quality_class'] == 'Medium'
+        assert classified['quality_class'] == expected_class
+        assert classified['policy_version'] == '1.2.0'
+
+
+def test_sports_path_rules_do_not_upgrade_unrelated_reuters_or_guardian_pages():
+    assert policy.classify('https://www.reuters.com/world/story')['quality_class'] == 'Medium'
+    assert policy.classify('https://www.theguardian.com/world/2026/story')['quality_class'] == 'Unknown'
+    assert policy.classify('https://www.theguardian.com/sporting/story')['quality_class'] == 'Unknown'
 
 
 def test_bing_sports_search_unwraps_and_domain_validates_results(monkeypatch):

@@ -12,9 +12,16 @@ class SourcePolicy:
         self.version = self.data['version']
 
     def classify(self, url: str) -> dict:
-        domain = urlparse(url).netloc.lower().removeprefix('www.')
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower().removeprefix('www.')
+        path = parsed.path.lower()
         for rule in self.data['rules']:
             if domain == rule['domain'] or domain.endswith('.' + rule['domain']):
+                path_prefix = rule.get('path_prefix')
+                if path_prefix:
+                    prefix = path_prefix.lower().rstrip('/')
+                    if path != prefix and not path.startswith(prefix + '/'):
+                        continue
                 return {**rule, 'domain': domain, 'policy_version': self.version}
         default = self.data['default']
         return {**default, 'domain': domain, 'policy_version': self.version}
