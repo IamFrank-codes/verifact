@@ -4,7 +4,7 @@ os.environ['VERIFACT_MODE'] = 'local-fixture'
 from fastapi.testclient import TestClient
 from app.main import app
 import app.main as main_module
-from app.ai.structured import EvidenceAssessment
+from app.ai.structured import ArticleClaimExtraction, EvidenceAssessment
 from app.evidence.providers import BingSportsOutletProvider, EvidenceItem
 from app.services import email as email_service
 from app.services import verification as verification_service
@@ -212,7 +212,7 @@ def test_bing_sports_searches_are_one_aggregate_retrieval_record(monkeypatch):
     assert not BingSportsOutletProvider.is_sports_related('WHO guidance on preventing abuse of older people.')
 
 
-def test_url_submission_searches_with_extracted_article_title(monkeypatch):
+def test_url_submission_extracts_headline_aligned_claim_searches_and_scores(monkeypatch):
     main_module.limiter._storage.reset()
     auth_client('url-search@example.com')
     for settings in (main_module.settings, verification_service.settings):
@@ -227,16 +227,24 @@ def test_url_submission_searches_with_extracted_article_title(monkeypatch):
         'text': ('The city council approved a new affordable housing plan on Tuesday. ' * 20),
     }
     monkeypatch.setattr(verification_service, 'extract_article', lambda _url: extracted)
+    central_claim = 'The city council approved a new affordable housing plan on Tuesday.'
+    monkeypatch.setattr(verification_service, 'extract_central_article_claim', lambda _title, _text: ArticleClaimExtraction(
+        central_claim=central_claim,
+        checkable=True,
+        headline_aligned=True,
+        rationale='This is the article’s central factual report and directly reflects the headline.',
+    ))
     searched = []
     class TestNewsProvider:
         name = 'Test news provider'
         def search(self, query):
             searched.append(query)
-            return [EvidenceItem('Example News', 'https://sources.example/housing-plan', '2026-10-17', 'The council approved the housing plan by a majority vote.', 'contextual', 'The report covers the same plan as the submitted article.', self.name)]
+            return [EvidenceItem('Reuters', 'https://www.reuters.com/world/housing-plan', '2026-10-17', 'The council approved the housing plan by a majority vote.', 'contextual', 'The report covers the same plan as the submitted article.', self.name)]
     monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: [TestNewsProvider()])
     monkeypatch.setattr(verification_service, 'is_enabled', lambda: True)
     def fake_assessment(claim_text, packet):
-        assert len(claim_text) > 240
+        assert claim_text == central_claim
+        assert len(packet) == 1
         return EvidenceAssessment(
             verdict='Mostly Supported',
             explanation='The retained record supports the central reported event.',
@@ -253,8 +261,44 @@ def test_url_submission_searches_with_extracted_article_title(monkeypatch):
     report_response = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
     assert report_response.status_code == 200
     report = report_response.json()
-    assert searched == ['City council approves a new affordable housing plan']
+    assert searched == [central_claim]
     assert report['article']['title'] == extracted['title']
+    assert report['claims'][0]['text'] == central_claim
+    assert report['claims'][0]['extraction_rationale'].startswith('This is the article’s central factual report')
     assert report['claims'][0]['evidence'][0]['provider'] == 'Test news provider'
     assert report['claims'][0]['evidence'][0]['relationship_type'] == 'supporting'
-    assert report['provider_runs'][0]['message'] == '1 record(s) returned for the article search.'
+    assert report['score'] is not None
+    assert report['score_details']['eligible'] is True
+    assert next(p for p in report['provider_runs'] if p['provider'] == 'Test news provider')['message'] == '1 record(s) returned for the article search.'
+
+
+def test_url_without_headline_aligned_checkable_claim_is_not_scored(monkeypatch):
+    main_module.limiter._storage.reset()
+    auth_client('url-opinion@example.com')
+    for settings in (main_module.settings, verification_service.settings):
+        monkeypatch.setattr(settings, 'mode', 'local-fixture')
+        monkeypatch.setattr(settings, 'inline_processing', True)
+    extracted = {
+        'url': 'https://news.example/opinion',
+        'title': 'A future we should all hope for',
+        'author': 'Columnist',
+        'publisher': 'Example News',
+        'published_at': '2026-10-17',
+        'text': 'This opinion article discusses hopes and recommendations rather than a central checkable factual event. ' * 4,
+    }
+    monkeypatch.setattr(verification_service, 'extract_article', lambda _url: extracted)
+    monkeypatch.setattr(verification_service, 'extract_central_article_claim', lambda _title, _text: ArticleClaimExtraction(
+        central_claim='',
+        checkable=False,
+        headline_aligned=False,
+        rationale='The headline and article express opinion rather than one checkable factual proposition.',
+    ))
+    monkeypatch.setattr(verification_service, 'enabled_external_providers', lambda: (_ for _ in ()).throw(AssertionError('Evidence search must be skipped for an uncheckable article.')))
+    created = client.post('/api/v1/verifications', json={'input_type': 'url', 'content': 'https://news.example/opinion'})
+    assert created.status_code == 202
+    report = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture").json()
+    assert report['score'] is None
+    assert report['score_details']['eligible'] is False
+    assert report['claims'][0]['checkable'] is False
+    assert report['claims'][0]['extraction_rationale'].startswith('The headline and article express opinion')
+    assert not report['claims'][0]['evidence']

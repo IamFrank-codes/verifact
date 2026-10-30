@@ -101,8 +101,8 @@ def source_out(source):
     return {'id': source.id, 'name': source.name, 'url': source.canonical_url, 'domain': source.domain, 'source_type': source.source_type, 'quality_class': source.quality_class, 'policy_version': source.policy_version, 'policy_rule': source.policy_rule, 'policy_rationale': source.policy_rationale}
 
 
-def claim_out(claim: Claim):
-    return {'id': claim.id, 'sequence': claim.sequence, 'text': claim.text, 'checkable': claim.checkable, 'claim_type': claim.claim_type, 'verdict': claim.verdict, 'explanation': claim.explanation, 'evidence_coverage': claim.evidence_coverage, 'freshness_note': claim.freshness_note, 'evidence': [{'id': e.id, 'relationship_type': e.relationship_type, 'excerpt': e.excerpt, 'relevance': e.relevance, 'published_at': e.published_at, 'retrieved_at': e.retrieved_at.isoformat(), 'provider': e.provider, 'fixture': e.fixture, 'source': source_out(e.source)} for e in claim.evidence]}
+def claim_out(claim: Claim, include_extraction_rationale: bool = False):
+    return {'id': claim.id, 'sequence': claim.sequence, 'text': claim.text, 'checkable': claim.checkable, 'claim_type': claim.claim_type, 'extraction_rationale': claim.extraction_rationale if include_extraction_rationale else None, 'verdict': claim.verdict, 'explanation': claim.explanation, 'evidence_coverage': claim.evidence_coverage, 'freshness_note': claim.freshness_note, 'evidence': [{'id': e.id, 'relationship_type': e.relationship_type, 'excerpt': e.excerpt, 'relevance': e.relevance, 'published_at': e.published_at, 'retrieved_at': e.retrieved_at.isoformat(), 'provider': e.provider, 'fixture': e.fixture, 'source': source_out(e.source)} for e in claim.evidence]}
 
 
 def verification_out(v: Verification, detail: bool = True):
@@ -110,7 +110,7 @@ def verification_out(v: Verification, detail: bool = True):
     result = {'id': v.id, 'input_type': v.input_type, 'original_input': v.original_input, 'status': v.status, 'stage': v.stage, 'evidence_status': v.evidence_status, 'summary': v.summary, 'score': v.score, 'score_band': v.score_band, 'coverage_pct': v.coverage_pct, 'policy_version': v.policy_version, 'is_public': v.is_public, 'public_id': v.public_id, 'mode': v.mode, 'error_message': v.error_message, 'created_at': v.created_at.isoformat(), 'completed_at': v.completed_at.isoformat() if v.completed_at else None, 'score_details': {'eligible': score_record.eligible, 'eligibility_reason': score_record.eligibility_reason, 'formula_version': score_record.formula_version, 'components': score_record.components} if score_record else None}
     if detail:
         result['article'] = {'url': v.article.url, 'title': v.article.title, 'author': v.article.author, 'publisher': v.article.publisher, 'published_at': v.article.published_at, 'extraction_status': v.article.extraction_status} if v.article else None
-        result['claims'] = [claim_out(c) for c in sorted(v.claims, key=lambda item: item.sequence)]
+        result['claims'] = [claim_out(c, include_extraction_rationale=v.input_type == 'url') for c in sorted(v.claims, key=lambda item: item.sequence)]
         result['provider_runs'] = [{'provider': p.provider, 'status': p.status, 'message': p.message} for p in v.provider_runs]
     return result
 

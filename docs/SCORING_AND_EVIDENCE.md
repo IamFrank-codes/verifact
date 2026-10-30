@@ -2,6 +2,12 @@
 
 VeriFact separates evidence retrieval, source-policy classification, evidence-bounded interpretation, and score calculation. Groq can assist with interpreting retained evidence, but it does not set source quality or calculate the score.
 
+## URL/article claim workflow
+
+For a URL submission, VeriFact extracts the article title and body, then asks the configured structured model to select one concise, checkable factual claim that is central to the article and directly aligned with its headline. It preserves the headline’s qualifications and uses the body to clarify rather than replace the headline’s proposition. The selected claim is stored in the report, shown with its extraction rationale, and used as the evidence-provider search query. The article URL itself is metadata, not evidence for the claim.
+
+If no single checkable headline-aligned claim can be selected, VeriFact records the article and claim-selection rationale but skips evidence search; the claim is marked uncheckable and receives no score. If structured claim extraction is unavailable but a headline exists, the headline is used as a provisional search claim and labelled as a fallback. Evidence assessment and score calculation then use the same evidence packet validation, source policy, coverage threshold, and score formula as other submissions. URL input can therefore receive a score when its extracted claim is validly assessed and the score eligibility criteria are met; it is not guaranteed a score merely because the article is accessible.
+
 ## When a score is available
 
 A report is score-eligible only when all of these conditions are met:

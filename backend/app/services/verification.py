@@ -9,7 +9,7 @@ from app.evidence.source_policy import policy
 from app.evidence.providers import enabled_external_providers, EvidenceItem, BingSportsOutletProvider
 from app.fixtures.deterministic import find_fixture, generic_claim
 from app.services.extraction import extract_article, ExtractionError
-from app.ai.structured import analyze_evidence, is_enabled, EvidenceAnalysisError
+from app.ai.structured import analyze_evidence, extract_central_article_claim, is_enabled, EvidenceAnalysisError
 
 settings = get_settings()
 logger = logging.getLogger('verifact.verification')
@@ -34,16 +34,16 @@ def provider_failure_message(provider_name: str, exc: Exception) -> str:
         return f'{provider_name} could not be reached. No provider result was retained as evidence.'
     return f'{provider_name} request failed. No provider result was retained as evidence.'
 
-def evidence_search_query(input_type: str, claim_text: str, content: str, article_title: str | None = None) -> str:
-    if input_type == 'url' and article_title and article_title.strip():
-        candidate = article_title
-    elif input_type in {'url', 'text'}:
+def evidence_search_query(input_type: str, claim_text: str, content: str) -> str:
+    if input_type == 'url':
+        candidate = claim_text
+    elif input_type == 'text':
         candidate = content
     else:
         candidate = claim_text
     candidate = ' '.join(candidate.split())
     if len(candidate) > 240:
-        # Article bodies are poor search queries; keep the opening sentence or a short prefix.
+        # Keep provider search terms bounded while preserving a complete opening sentence when possible.
         first_sentence = candidate.split('. ', 1)[0]
         candidate = first_sentence if len(first_sentence) <= 240 else candidate[:240].rsplit(' ', 1)[0]
     return candidate or claim_text[:240]
@@ -99,6 +99,9 @@ def run_verification(db: Session, verification_id: str):
         return
     news_summary = None
     analysis_error = None
+    url_claim_text = None
+    url_claim_checkable = True
+    url_claim_rationale = 'Identified as a checkable factual statement.'
     try:
         set_stage(db, verification, 'Processing input')
         content = verification.original_input
@@ -112,20 +115,48 @@ def run_verification(db: Session, verification_id: str):
             article_title = article_data.get('title')
             article = Article(url=article_data['url'], title=article_title, author=article_data.get('author'), publisher=article_data.get('publisher'), published_at=article_data.get('published_at'), extracted_text=article_data['text'], extraction_status='complete')
             db.add(article); db.flush(); verification.article_id = article.id; verification.article = article; content = article_data['text']; db.commit()
-        should_search_live_sources = settings.live_provider_mode or verification.input_type == 'url' or settings.sports_source_search_enabled
+            set_stage(db, verification, 'Selecting headline-aligned claim')
+            try:
+                article_claim = extract_central_article_claim(article_title, content)
+            except EvidenceAnalysisError as exc:
+                article_claim = None
+                logger.warning('Article claim extraction unavailable: %s', exc)
+            if article_claim is None:
+                if article_title and article_title.strip():
+                    url_claim_text = article_title.strip()[:1000]
+                    url_claim_rationale = 'Article-claim extraction was unavailable; the headline is used as a provisional search claim and must be checked against independent evidence.'
+                    db.add(ProviderRun(verification_id=verification.id, provider='Article claim extraction', status='partial', message='Could not derive a body-informed claim; the headline was used as a provisional search claim.'))
+                else:
+                    url_claim_text = 'No headline-aligned central claim could be extracted from this article.'
+                    url_claim_checkable = False
+                    url_claim_rationale = 'No headline was available and article-claim extraction could not identify a verifiable, headline-aligned claim.'
+                    db.add(ProviderRun(verification_id=verification.id, provider='Article claim extraction', status='unavailable', message='No headline-aligned central claim could be extracted; evidence search and scoring were skipped.'))
+            else:
+                url_claim_text = article_claim.central_claim.strip()[:1000] or article_title or 'No headline-aligned central claim could be extracted from this article.'
+                url_claim_checkable = bool(article_claim.checkable and article_claim.headline_aligned and article_claim.central_claim.strip())
+                url_claim_rationale = article_claim.rationale
+                if url_claim_checkable:
+                    db.add(ProviderRun(verification_id=verification.id, provider='Article claim extraction', status='success', message='Selected one checkable central claim aligned with the article headline.'))
+                else:
+                    db.add(ProviderRun(verification_id=verification.id, provider='Article claim extraction', status='unavailable', message='No single checkable central claim closely aligned with the headline; evidence search and scoring were skipped.'))
+            db.commit()
+        should_search_live_sources = url_claim_checkable and (settings.live_provider_mode or verification.input_type == 'url' or settings.sports_source_search_enabled)
         providers = enabled_external_providers() if should_search_live_sources else []
-        if settings.mode == 'academic-demo' and not settings.sports_source_search_enabled and BingSportsOutletProvider.is_sports_related(content):
+        if url_claim_checkable and settings.mode == 'academic-demo' and not settings.sports_source_search_enabled and BingSportsOutletProvider.is_sports_related(content):
             providers.extend(BingSportsOutletProvider(domain) for domain in BingSportsOutletProvider.outlets)
         use_live_sources = settings.live_provider_mode or bool(providers)
         set_stage(db, verification, 'Identifying factual claims')
         use_fixture = not use_live_sources and (settings.mode == 'local-fixture' or (settings.mode == 'hybrid' and not settings.local_real_api_mode))
-        fixture = find_fixture(content) if use_fixture else None
-        result = fixture or generic_claim(content)
-        freshness_note = 'Evidence dates are displayed on each record. Local fixtures are demonstration data.' if use_fixture else 'Evidence dates are displayed on each retained live-provider record.'
-        claim = Claim(verification_id=verification.id, sequence=1, text=result['claim'], verdict=result['verdict'], explanation=result['explanation'], evidence_coverage='2 retained evidence records' if result['evidence'] else 'No retained evidence records', freshness_note=freshness_note)
+        fixture = find_fixture(content) if use_fixture and url_claim_checkable else None
+        if verification.input_type == 'url':
+            result = {'claim': url_claim_text or 'No headline-aligned central claim could be extracted from this article.', 'verdict': 'Insufficient Evidence', 'explanation': 'VeriFact will assess this article claim only against retained independent evidence.', 'evidence': []}
+        else:
+            result = fixture or generic_claim(content)
+        freshness_note = 'Evidence dates are displayed on each record. Local fixtures are demonstration data.' if fixture else 'Evidence dates are displayed on each retained live-provider record.' if use_live_sources else 'No retained evidence was retrieved; no live evidence lookup was performed.'
+        claim = Claim(verification_id=verification.id, sequence=1, text=result['claim'], checkable=url_claim_checkable if verification.input_type == 'url' else True, claim_type='factual' if verification.input_type != 'url' or url_claim_checkable else 'uncheckable', extraction_rationale=url_claim_rationale if verification.input_type == 'url' else 'Identified as a checkable factual statement.', verdict=result['verdict'], explanation=result['explanation'], evidence_coverage='2 retained evidence records' if result['evidence'] else 'No retained evidence records', freshness_note=freshness_note)
         db.add(claim); db.flush(); db.commit()
         set_stage(db, verification, 'Retrieving and comparing evidence')
-        search_query = evidence_search_query(verification.input_type, claim.text, content, article_title)
+        search_query = evidence_search_query(verification.input_type, claim.text, content)
         items = list(result['evidence'])
         if should_search_live_sources and not providers:
             message = 'No live evidence providers are configured for this URL. Configure Google Fact Check Tools, GDELT, or NewsAPI, or enable selected sports-source search for sports testing.'
