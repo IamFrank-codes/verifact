@@ -194,7 +194,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .table-row strong{display:block;color:#263f57;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .table-row small{color:#8493a2;margin-top:5px;display:block}
 .table-row .status-pill{max-width:max-content}
-.trash{border:0;background:transparent;color:#b34a56;font-size:22px}
+.trash{display:grid;place-items:center;width:34px;height:34px;padding:7px;border:0;border-radius:7px;background:transparent;color:#b34a56;cursor:pointer;transition:background .16s ease,color .16s ease}.trash:hover:not(:disabled),.trash:focus-visible{background:#fff0f1;color:#8e2531}.trash:focus-visible{outline:2px solid #b34a56;outline-offset:2px}.trash:disabled{opacity:.55;cursor:wait}.trash svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .public-report{width:100%;max-width:960px;margin:auto;padding:clamp(30px,5vw,60px)}
 .public-top{height:82px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dbe5ed;margin-bottom:32px}
 .public-top>span{color:#718397;font-size:12px}
