@@ -36,31 +36,21 @@ The report exposes eligibility, formula version, coverage, and component values.
 
 `backend/app/fixtures/source_policy.json` is the versioned policy file. It maps recognized domains to a source type, quality class, policy weight, and rationale. The backend applies these rules; the model cannot assign or override a source's quality class.
 
-| Domain | Current class | Source type |
+| Domain | v1.1.0 class | Source type |
 |---|---|---|
 | `who.int` | High | International organization |
 | `cdc.gov` | High | Government agency |
 | `nih.gov` | High | Government research institution |
-| `factcheck.org` | High | Fact-check organization |
-| `reuters.com/sports/**` | High | User-selected Reuters Sports reference |
-| Other `reuters.com` paths | Medium | Established news organization |
-| `apnews.com/sports/**` | High | User-selected Associated Press Sports reference |
-| `espn.com` | High | User-selected ESPN sports reference |
+| `reuters.com` | Medium | Established news organization |
 | `bbc.com` | Medium | User-selected sports news organization |
 | `aljazeera.com` | Medium | User-selected sports news organization |
-| `skysports.com` | High | User-selected Sky Sports reference |
-| `theathletic.com` | High | User-selected The Athletic sports reference |
-| `supersport.com` | High | User-selected SuperSport reference |
-| `theguardian.com/sport/**` | High | User-selected Guardian Sport reference |
-| `cbssports.com` | High | User-selected CBS Sports reference |
-| `olympics.com` | High | Official Olympic information and results |
+| `skysports.com` | Medium | User-selected sports news organization |
+| `factcheck.org` | High | Fact-check organization |
 | Any unmatched domain | Unknown | Unclassified source |
 
-A domain/path absent from the policy is **Unknown** unless a broader domain rule applies. Unknown does not mean false or inherently untrustworthy, but it cannot by itself satisfy the qualifying-source gate. Policy version 1.2.0 maps the user-provided “Very high” and “High” reliability labels to VeriFact's supported **High** class; the scoring engine does not distinguish those as separate classes. Reuters and Guardian sports rules are path-scoped so non-sports pages do not inherit the sports classification. These are configured publisher-level policy references, not an independent audit of publisher quality or a guarantee that an individual article supports a claim.
+Policy version 1.1.0 classifies the four user-selected sports publishers—Reuters, BBC Sport, Al Jazeera Sports, and Sky Sports—as **Medium**; the Reuters rule applies to the domain generally, not only its sports path. Unknown does not mean false or inherently untrustworthy, but an Unknown source cannot by itself satisfy the qualifying-source gate. These are configured publisher-level classifications, not an independent audit of publisher quality or a guarantee that an individual article supports a claim.
 
-The configured sports references include the sports coverage supplied by the system owner: Reuters Sports (football, F1, tennis, cricket, Olympics), AP Sports (football, basketball, tennis, Olympics), ESPN (football, NBA, NFL, F1, tennis), Sky Sports (football, F1, boxing, cricket), The Athletic (football, basketball, NFL, other sports), SuperSport (football, rugby, cricket, athletics), The Guardian Sport (football, tennis, cricket, rugby), CBS Sports (NFL, NBA, football, golf), and Olympics.com (Olympic sports and official results). VeriFact remains available for other topics. A source-policy match does not guarantee that a specific article directly supports a claim. Absence of a claim from any selected publisher is not evidence that the claim is false.
-
-The source-policy additions classify matching results returned by enabled providers; they do **not** automatically add new search providers. In `academic-demo` mode, the current Bing News RSS sports-search adapters remain limited to BBC, Al Jazeera, Reuters, and Sky Sports. Clear sports claims automatically search those outlets, even when `VERIFACT_SPORTS_SOURCE_SEARCH_ENABLED` is false. Set it to `true` to search those selected outlets for every claim, or to enable them in other live modes. Searches use a separate `site:` restriction for each configured outlet, unwrap Bing's redirect link, and discard results whose final URL is outside the allowed domain. The saved evidence URL points to the publisher, not Bing. The report groups these searches into one Bing News RSS retrieval entry; individual evidence records still name their publisher. This path supplements Google Fact Check Tools, GDELT, and NewsAPI; it does not replace general-topic searches. Search results can be incomplete or blocked by the index, so zero results means “not found by this search,” not “false.”
+The source-policy rules classify matching results returned by enabled providers; they do **not** add search providers. In `academic-demo` mode, the Bing News RSS sports-search adapters remain limited to BBC, Al Jazeera, Reuters, and Sky Sports. Clear sports claims automatically search those outlets, even when `VERIFACT_SPORTS_SOURCE_SEARCH_ENABLED` is false. Set it to `true` to search those selected outlets for every claim, or to enable them in other live modes. Searches use a separate `site:` restriction for each configured outlet, unwrap Bing's redirect link, and discard results whose final URL is outside the allowed domain. The saved evidence URL points to the publisher, not Bing. The report groups these searches into one Bing News RSS retrieval entry; individual evidence records still name their publisher. This path supplements Google Fact Check Tools, GDELT, and NewsAPI; it does not replace general-topic searches. Search results can be incomplete or blocked by the index, so zero results means “not found by this search,” not “false.”
 
 ## What the providers and model do
 
