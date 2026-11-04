@@ -99,6 +99,8 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
   const[report,setReport]=useState<Verification|null>(null)
   const[error,setError]=useState('')
   const[loading,setLoading]=useState(true)
+  const[shareBusy,setShareBusy]=useState(false)
+  const[shareError,setShareError]=useState('')
   const[shareMessage,setShareMessage]=useState('')
   const[pdfPreparing,setPdfPreparing]=useState(false)
   const[preparedPdf,setPreparedPdf]=useState<Blob|null>(null)
@@ -131,6 +133,21 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
     window.addEventListener('keydown',onKeyDown)
     return()=>window.removeEventListener('keydown',onKeyDown)
   },[emailDialogOpen,emailSendBusy])
+  async function toggleShare(){
+    if(!report)return
+    setShareBusy(true);setShareError('')
+    try{
+      const r=await api<{is_public:boolean;public_id:string;url?:string}>(`/api/v1/verifications/${report.id}/share`,{method:'POST',body:JSON.stringify({is_public:!report.is_public})})
+      setReport({...report,is_public:r.is_public,public_id:r.public_id})
+      if(r.url){
+        try{
+          if(!navigator.clipboard)throw new Error('Clipboard unavailable')
+          await navigator.clipboard.writeText(r.url)
+          setShareMessage(r.is_public?'Public link copied to clipboard.':'Report is private.')
+        }catch{setShareMessage(r.is_public?'Public link enabled.':'Report is private.')}
+      }else setShareMessage(r.is_public?'Public link enabled.':'Report is private.')
+    }catch(err){setShareError((err as Error).message)}finally{setShareBusy(false)}
+  }
   async function prepareEmailPdf(){
     if(!report||pdfPreparing)return
     setPdfPreparing(true);setEmailError('');setShareMessage('')
@@ -163,7 +180,7 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
   if(error)return <PageShell className="report-page"><Notice kind="error">{error}</Notice></PageShell>
   if(!report)return null
   const statuses=report.claims||[]
-  const actions=!publicView&&<div className="report-actions"><Button disabled={pdfPreparing} onClick={prepareEmailPdf}>{pdfPreparing?'Preparing PDF…':'Email report PDF'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}{emailError&&!emailDialogOpen&&<span className="share-error" role="alert">{emailError}</span>}</div>
+  const actions=!publicView&&<div className="report-actions"><Button disabled={pdfPreparing} onClick={prepareEmailPdf}>{pdfPreparing?'Preparing PDF…':'Email report PDF'}</Button><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}{shareError&&<span className="share-error" role="alert">{shareError}</span>}{emailError&&!emailDialogOpen&&<span className="share-error" role="alert">{emailError}</span>}</div>
   const description=<>Submitted as {report.input_type}. {report.mode==='local-fixture'&&<span className="fixture-badge">Local demonstration mode</span>}</>
   return <PageShell className={publicView?'public-report':'report-page'} beforeHeader={publicView&&<header className="public-top"><Brand/><span>Evidence-based verification report</span></header>} eyebrow="VERIFACT REPORT" title={report.article?.title||short(report.original_input,120)} description={description} actions={actions}>
     <ScoreCard report={report}/>
@@ -176,6 +193,7 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
     {emailDialogOpen&&!publicView&&<div className="email-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)closeEmailDialog()}}><section className="email-dialog" role="dialog" aria-modal="true" aria-labelledby="email-dialog-title" aria-describedby="email-dialog-description"><header className="email-dialog-header"><div><p className="eyebrow">SHARE REPORT</p><h2 id="email-dialog-title">Email the PDF report</h2><p id="email-dialog-description">The PDF has been prepared and will be attached to your email.</p></div><button type="button" className="email-dialog-close" aria-label="Close email dialog" onClick={closeEmailDialog} disabled={emailSendBusy}>×</button></header><div className="pdf-ready-card"><div><strong>PDF ready</strong><span>{pdfFileName}</span></div>{preparedPdfUrl&&<a href={preparedPdfUrl} download={pdfFileName}>Download a copy</a>}</div><form className="email-dialog-form" onSubmit={sendPdfEmail} aria-busy={emailSendBusy}><label htmlFor="report-recipient-email">Recipient email address</label><input ref={emailInputRef} id="report-recipient-email" type="email" autoComplete="email" required value={emailInput} aria-invalid={emailInput.length>0&&!emailInputValid} onChange={event=>{const value=event.currentTarget.value;setEmailInput(value);setEmailInputValid(event.currentTarget.validity.valid&&EMAIL_FORMAT.test(value.trim()))}} placeholder="name@example.com" disabled={emailSendBusy}/>{emailInput.length>0&&!emailInputValid&&<p className="email-validation invalid" role="status">Enter a valid email address to enable sending.</p>}{emailInputValid&&<p className="email-validation valid" role="status">Email address looks valid.</p>}{emailError&&<Notice kind="error">{emailError}</Notice>}<div className="email-dialog-actions"><Button disabled={!emailInputValid||emailSendBusy}>{emailSendBusy?'Sending PDF…':'Send PDF'}</Button><Button type="button" className="secondary" onClick={closeEmailDialog} disabled={emailSendBusy}>Cancel</Button></div></form></section></div>}
   </PageShell>
 }
+
 function Verify({go}:{go:(r:string)=>void}){
   const[type,setType]=useState<'text'|'url'>('text')
   const[textContent,setTextContent]=useState('')
