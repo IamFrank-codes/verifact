@@ -99,7 +99,6 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
   const[report,setReport]=useState<Verification|null>(null)
   const[error,setError]=useState('')
   const[loading,setLoading]=useState(true)
-  const[shareBusy,setShareBusy]=useState(false)
   const[shareMessage,setShareMessage]=useState('')
   const[pdfPreparing,setPdfPreparing]=useState(false)
   const[preparedPdf,setPreparedPdf]=useState<Blob|null>(null)
@@ -132,18 +131,6 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
     window.addEventListener('keydown',onKeyDown)
     return()=>window.removeEventListener('keydown',onKeyDown)
   },[emailDialogOpen,emailSendBusy])
-  async function toggleShare(){
-    if(!report)return
-    setShareBusy(true)
-    try{
-      const r=await api<{is_public:boolean;public_id:string;url?:string}>(`/api/v1/verifications/${report.id}/share`,{method:'POST',body:JSON.stringify({is_public:!report.is_public})})
-      setReport({...report,is_public:r.is_public,public_id:r.public_id})
-      if(r.url){
-        try{await navigator.clipboard?.writeText(r.url);setShareMessage(r.is_public?'Public link copied to clipboard.':'Report is private.')}
-        catch{setShareMessage(r.is_public?'Public link enabled.':'Report is private.')}
-      }else setShareMessage(r.is_public?'Public link enabled.':'Report is private.')
-    }catch(e){setError((e as Error).message)}finally{setShareBusy(false)}
-  }
   async function prepareEmailPdf(){
     if(!report||pdfPreparing)return
     setPdfPreparing(true);setEmailError('');setShareMessage('')
@@ -176,7 +163,7 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
   if(error)return <PageShell className="report-page"><Notice kind="error">{error}</Notice></PageShell>
   if(!report)return null
   const statuses=report.claims||[]
-  const actions=!publicView&&<div className="report-actions"><Button disabled={pdfPreparing} onClick={prepareEmailPdf}>{pdfPreparing?'Preparing PDF…':'Email report PDF'}</Button><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}{emailError&&!emailDialogOpen&&<span className="share-error" role="alert">{emailError}</span>}</div>
+  const actions=!publicView&&<div className="report-actions"><Button disabled={pdfPreparing} onClick={prepareEmailPdf}>{pdfPreparing?'Preparing PDF…':'Email report PDF'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}{emailError&&!emailDialogOpen&&<span className="share-error" role="alert">{emailError}</span>}</div>
   const description=<>Submitted as {report.input_type}. {report.mode==='local-fixture'&&<span className="fixture-badge">Local demonstration mode</span>}</>
   return <PageShell className={publicView?'public-report':'report-page'} beforeHeader={publicView&&<header className="public-top"><Brand/><span>Evidence-based verification report</span></header>} eyebrow="VERIFACT REPORT" title={report.article?.title||short(report.original_input,120)} description={description} actions={actions}>
     <ScoreCard report={report}/>
