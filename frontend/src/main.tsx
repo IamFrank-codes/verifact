@@ -261,18 +261,23 @@ function History({go}:{go:(r:string)=>void}){
   const[filter,setFilter]=useState('')
   const[error,setError]=useState('')
   const[success,setSuccess]=useState('')
+  const successTimer=useRef<number|null>(null)
   const[deleting,setDeleting]=useState<string|null>(null)
   const[loading,setLoading]=useState(true)
+  useEffect(()=>()=>{if(successTimer.current!==null)window.clearTimeout(successTimer.current)},[])
   const load=()=>api<{items:Verification[]}>('/api/v1/verifications?'+new URLSearchParams({...(q?{q}:{}),...(filter?{evidence_status:filter}:{})})).then(r=>setItems(r.items)).catch(e=>setError(e.message)).finally(()=>setLoading(false))
   useEffect(()=>{load()},[])
   async function remove(item:Verification){
     const title=short(item.original_input,100)
     if(!window.confirm(`Are you sure you want to delete the report “${title}”? This action cannot be undone.`))return
+    if(successTimer.current!==null){window.clearTimeout(successTimer.current);successTimer.current=null}
     setDeleting(item.id);setError('');setSuccess('')
     try{
       await api(`/api/v1/verifications/${item.id}`,{method:'DELETE'})
       setItems(current=>current.filter(report=>report.id!==item.id))
       setSuccess(`Report “${title}” was deleted successfully.`)
+      if(successTimer.current!==null)window.clearTimeout(successTimer.current)
+      successTimer.current=window.setTimeout(()=>{setSuccess('');successTimer.current=null},5000)
     }catch(e){setError((e as Error).message)}finally{setDeleting(null)}
   }
   return <PageShell className="history-page" eyebrow="MY REPORTS" title="Verification history" description="Stored evidence and report visibility remain under your control." actions={<Button className="secondary" onClick={()=>go('/verify')}>New verification</Button>}>
