@@ -100,6 +100,7 @@ def test_bing_sports_search_unwraps_and_domain_validates_results(monkeypatch):
     assert captured['params']['format'] == 'rss'
     assert 'site:skysports.com' in captured['params']['q']
     assert providers.BingSportsOutletProvider._search_query('Mykhailo Mudryk: Chelsea winger to appeal against four-year ban for doping offence') == 'mykhailo mudryk chelsea doping ban'
+    assert providers.BingSportsOutletProvider._search_query('The Springbox has won most World Cups.') == 'springboks most world cup'
     assert captured['timeout'] == 8
     assert len(results) == 1
     assert results[0].url == 'https://www.skysports.com/football/news/mudryk-update'

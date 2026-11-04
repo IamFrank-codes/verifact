@@ -187,6 +187,7 @@ class BingSportsOutletProvider:
     stop_words = {'the', 'and', 'for', 'with', 'from', 'against', 'after', 'before', 'into', 'onto', 'over', 'under', 'to', 'of', 'in', 'on', 'at', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'do', 'does', 'did', 'their', 'his', 'her', 'its', 'who', 'what', 'when', 'where', 'why', 'how'}
     sports_terms = ('doping', 'ban', 'appeal', 'injury', 'transfer', 'suspension', 'cleared', 'return', 'goal', 'goals', 'scored', 'score', 'won', 'win', 'beat', 'defeated', 'loss', 'final', 'title', 'champion', 'champions', 'league', 'cup', 'rugby', 'football', 'soccer', 'tennis', 'race', 'medal', 'record', 'signed', 'coach', 'manager', 'match', 'tournament', 'olympic')
     sports_topic_markers = {'sport', 'sports', 'football', 'soccer', 'rugby', 'tennis', 'cricket', 'basketball', 'baseball', 'hockey', 'volleyball', 'golf', 'boxing', 'mma', 'ufc', 'cycling', 'swimming', 'athletics', 'wrestling', 'badminton', 'f1', 'formula1', 'fifa', 'uefa', 'olympic', 'olympics', 'messi', 'ronaldo', 'ballon', 'nba', 'nfl', 'mlb', 'nhl', 'wimbledon', 'nascar'}
+    query_aliases = {'springbox': 'springboks'}
 
     @classmethod
     def is_sports_related(cls, text: str) -> bool:
@@ -208,8 +209,13 @@ class BingSportsOutletProvider:
         useful = []
         for word in words:
             normalized = word.casefold()
+            normalized = cls.query_aliases.get(normalized, normalized)
             if len(normalized) >= 3 and normalized not in cls.stop_words and normalized not in useful:
                 useful.append(normalized)
+        normalized_claim = ' '.join(words).casefold()
+        if re.search(r'\bworld cups?\b', normalized_claim):
+            subjects = [term for term in useful if term not in {'world', 'cup', 'cups', 'won'}][:2]
+            return ' '.join(subjects + ['world', 'cup'])
         subject = useful[:3]
         topic = [term for term in cls.sports_terms if term in useful and term not in subject][:2]
         return ' '.join(subject + topic) or ' '.join(words[:12])
