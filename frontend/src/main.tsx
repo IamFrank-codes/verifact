@@ -118,7 +118,9 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
 }
 function Verify({go}:{go:(r:string)=>void}){
   const[type,setType]=useState<'text'|'url'>('text')
-  const[content,setContent]=useState('')
+  const[textContent,setTextContent]=useState('')
+  const[urlContent,setUrlContent]=useState('')
+  const content=type==='url'?urlContent:textContent
   const[error,setError]=useState('')
   const[busy,setBusy]=useState(false)
   const[stage,setStage]=useState('')
@@ -150,13 +152,13 @@ function Verify({go}:{go:(r:string)=>void}){
   }
   const statusMessage=error?<Notice kind="error">{error}</Notice>:stage?<Notice>{stage}</Notice>:null
   return <PageShell className="verify-page" eyebrow="NEW VERIFICATION" title="Start with the claim. Then inspect the evidence." description="VeriFact looks for reviewable evidence, applies a fixed source policy, and leaves weakly supported submissions scoreless.">
-    <form className="verification-form" onSubmit={submit}>
+    <form className="verification-form" onSubmit={submit} aria-busy={busy}>
+      {statusMessage&&<div key={`${error?'error':'stage'}:${error||stage}`} className={`verification-status-message${busy?' is-loading':''}`} aria-live="polite">{busy&&<span className="verification-spinner" aria-hidden="true"/>}{statusMessage}</div>}
       <div className="type-tabs" role="tablist" aria-label="Verification input type">
-        <button role="tab" aria-selected={type==='text'} className={type==='text'?'selected':''} type="button" onClick={()=>setType('text')}>Paste text</button>
-        <button role="tab" aria-selected={type==='url'} className={type==='url'?'selected':''} type="button" onClick={()=>setType('url')}>Article URL</button>
+        <button role="tab" aria-selected={type==='text'} className={type==='text'?'selected':''} type="button" disabled={busy} onClick={()=>setType('text')}>Paste text</button>
+        <button role="tab" aria-selected={type==='url'} className={type==='url'?'selected':''} type="button" disabled={busy} onClick={()=>setType('url')}>Article URL</button>
       </div>
-      <label>{type==='url'?'Public article URL':'Article or news text'}<textarea value={content} onChange={e=>setContent(e.target.value)} placeholder={type==='url'?'https://example.org/article':'Paste the article or news text you want to verify…'} required/></label>
-      {statusMessage&&<div key={`${error?'error':'stage'}:${error||stage}`} className="verification-status-message" aria-live="polite">{statusMessage}</div>}
+      <label>{type==='url'?'Public article URL':'Article or news text'}{type==='url'?<input className="verification-url-input" type="url" autoComplete="url" value={urlContent} onChange={e=>setUrlContent(e.target.value)} placeholder="https://example.org/article" required disabled={busy}/>:<textarea value={textContent} onChange={e=>setTextContent(e.target.value)} placeholder="Paste the article or news text you want to verify…" required disabled={busy}/>}</label>
       <Button disabled={busy}>{busy?'Verifying evidence…':'Verify with evidence'}</Button>
       <p className="form-note">VeriFact does not use an AI answer alone. If evidence is insufficient, the report will show no overall score.</p>
     </form>
