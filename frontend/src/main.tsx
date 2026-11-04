@@ -46,6 +46,9 @@ function Brand({compact=false}:{compact?:boolean}){return <div className="brand"
 function Notice({kind='info', children}:{kind?:string;children:React.ReactNode}){return <div className={`notice ${kind}`} role={kind==='error'?'alert':'status'} aria-live={kind==='error'?'assertive':'polite'}>{children}</div>}
 function Button({children, className='', ...props}:React.ButtonHTMLAttributes<HTMLButtonElement>){return <button className={`button ${className}`} {...props}>{children}</button>}
 
+type PageShellProps = {children:React.ReactNode; className?:string; eyebrow?:React.ReactNode; title?:React.ReactNode; description?:React.ReactNode; actions?:React.ReactNode; beforeHeader?:React.ReactNode}
+function PageShell({children,className='',eyebrow,title,description,actions,beforeHeader}:PageShellProps){return <main className={`app-page page-shell ${className}`}>{beforeHeader}{title!==undefined&&<header className="page-header"><div className="page-header-copy">{eyebrow&&<p className="eyebrow">{eyebrow}</p>}<h1>{title}</h1>{description&&<p>{description}</p>}</div>{actions&&<div className="page-header-actions">{actions}</div>}</header>}{children}</main>}
+
 function AuthShell({children}:{children:React.ReactNode}){return <main className="auth-page"><section className="auth-aside"><Brand/><div className="eyebrow">EVIDENCE-BASED VERIFICATION</div><h1>Verification deserves more than a confident answer.</h1><p>VeriFact keeps evidence, source policy, uncertainty, and scoring rules visible—so you can understand the basis of every result.</p></section><section className="auth-card"><div className="auth-content">{children}</div></section></main>}
 
 function Login({onLogin, go}:{onLogin:(u:User)=>void;go:(route:string)=>void}){
@@ -75,57 +78,103 @@ function Header({user,route,go,onLogout}:{user:User;route:string;go:(r:string)=>
 function ScoreCard({report}:{report:Verification}){const scored=report.score!==null;return <section className={`score-card ${scored?'scored':'unscored'}`}><div><p className="eyebrow">EVIDENCE STATUS</p><span role="status" className={`status-pill ${scored?'status-supported':'status-insufficient'}`}>{report.evidence_status}</span></div>{scored?<><div className="score-number"><strong>{report.score}</strong><span>/100</span></div><div><h2>{report.score_band}</h2><p>Score reflects {report.coverage_pct}% weighted claim coverage from retained evidence. It is a policy-based summary, not a measure of absolute truth.</p></div></>:<div className="no-score"><h2>No overall score</h2><p>VeriFact did not assign an arbitrary value because the retrieved evidence did not meet the configured coverage and source-policy threshold.</p></div>}<p className="verified-date">Verified {fmtDate(report.completed_at||report.created_at)} · Source policy {report.policy_version}</p></section>}
 function EvidenceList({items}:{items:Evidence[]}){if(!items.length)return <div className="empty-inline">No retained evidence records were available for this relationship.</div>;return <div className="evidence-list">{items.map(item=><article className="evidence" key={item.id}><div className="evidence-head"><div><a href={item.source.url} target="_blank" rel="noreferrer">{item.source.name}</a><span>{item.source.source_type} · {item.source.quality_class} policy classification</span></div><time>{fmtDate(item.published_at)}</time></div><blockquote>“{item.excerpt}”</blockquote><p>{item.relevance}</p><div className="evidence-meta"><span>Retrieved via {item.provider}</span>{item.fixture&&<span>Local demonstration data</span>}</div><details><summary>Why this source classification?</summary><p>{item.source.policy_rationale} Policy rule: <code>{item.source.policy_rule}</code>; version {item.source.policy_version}.</p></details></article>)}</div>}
 function ClaimCard({claim}:{claim:Claim}){const[open,setOpen]=useState(false);const grouped={supporting:claim.evidence.filter(e=>e.relationship_type==='supporting'),contradicting:claim.evidence.filter(e=>e.relationship_type==='contradicting'),contextual:claim.evidence.filter(e=>e.relationship_type==='contextual')};return <article className="claim-card"><div className="claim-top"><span className={`status-pill ${verdictClass(claim.verdict)}`}>{claim.verdict}</span><span className="claim-index">CLAIM {String(claim.sequence).padStart(2,'0')}</span></div><h3>“{claim.text}”</h3><p className="claim-explanation">{claim.explanation}</p>{claim.extraction_rationale&&<p className="claim-rationale"><b>Claim selection:</b> {claim.extraction_rationale}</p>}<div className="coverage-row"><span><b>Evidence coverage:</b> {claim.evidence_coverage}</span><span>{claim.freshness_note}</span></div><button className="evidence-toggle" aria-expanded={open} onClick={()=>setOpen(!open)}>{open?'Hide evidence':'Review evidence'} <span>{open?'−':'+'}</span></button>{open&&<div className="claim-evidence"><section><h4>Supporting evidence <small>{grouped.supporting.length}</small></h4><EvidenceList items={grouped.supporting}/></section><section><h4>Contradicting evidence <small>{grouped.contradicting.length}</small></h4><EvidenceList items={grouped.contradicting}/></section><section><h4>Context and fact-check records <small>{grouped.contextual.length}</small></h4><EvidenceList items={grouped.contextual}/></section></div>}</article>}
-function Report({id,publicView=false}:{id:string;publicView?:boolean}){const[report,setReport]=useState<Verification|null>(null);const[error,setError]=useState('');const[loading,setLoading]=useState(true);const[shareBusy,setShareBusy]=useState(false);const[shareMessage,setShareMessage]=useState('');useEffect(()=>{api<Verification>(publicView?`/api/v1/reports/${id}`:`/api/v1/verifications/${id}`).then(setReport).catch(e=>setError(e.message)).finally(()=>setLoading(false))},[id,publicView]);async function toggleShare(){if(!report)return;setShareBusy(true);try{const r=await api<{is_public:boolean;public_id:string;url?:string}>(`/api/v1/verifications/${report.id}/share`,{method:'POST',body:JSON.stringify({is_public:!report.is_public})});setReport({...report,is_public:r.is_public,public_id:r.public_id});if(r.url){try{await navigator.clipboard?.writeText(r.url);setShareMessage(r.is_public?'Public link copied to clipboard.':'Report is private.')}catch{setShareMessage(r.is_public?'Public link enabled.':'Report is private.')}}else setShareMessage(r.is_public?'Public link enabled.':'Report is private.')}catch(e){setError((e as Error).message)}finally{setShareBusy(false)}}if(loading)return <div className="page-loading">Preparing the VeriFact report…</div>;if(error)return <div className="report-page"><Notice kind="error">{error}</Notice></div>;if(!report)return null;const statuses=report.claims||[];return <main className={publicView?'public-report':'app-page report-page'}>{publicView&&<header className="public-top"><Brand/><span>Evidence-based verification report</span></header>}{!publicView&&<div className="report-actions"><div><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}</div></div>}<section className="report-heading"><p className="eyebrow">VERIFACT REPORT</p><h1>{report.article?.title||short(report.original_input,120)}</h1><p>Submitted as {report.input_type}. {report.mode==='local-fixture'&&<span className="fixture-badge">Local demonstration mode</span>}</p></section><ScoreCard report={report}/><section className="report-summary"><div><p className="eyebrow">VERIFICATION SUMMARY</p><h2>{statuses.length} claim{statuses.length===1?'':'s'} assessed</h2></div><p>{report.summary}</p>{report.score_details&&<details className="score-method"><summary>How score eligibility and scoring were determined</summary><p>{report.score_details.eligibility_reason}</p>{report.score_details.eligible&&<div className="components">{Object.entries(report.score_details.components).map(([k,v])=><div key={k}><span>{k.replaceAll('_',' ')}</span><b>{v}</b></div>)}</div>}<p>Formula version {report.score_details.formula_version}. Scores are conditional on retrieved evidence and VeriFact policy; they do not establish absolute truth.</p></details>}</section>{report.article&&<section className="article-context"><p className="eyebrow">ARTICLE CONTEXT</p><div><span>Publisher <b>{report.article.publisher||'Not available'}</b></span><span>Published <b>{fmtDate(report.article.published_at)}</b></span><span>Extraction <b>{report.article.extraction_status}</b></span></div></section>}<section className="claims-section"><div className="section-heading"><div><p className="eyebrow">CLAIM-BY-CLAIM ANALYSIS</p><h2>What the retained evidence supports</h2></div><p>VeriFact’s assessments are limited to the dated records shown below.</p></div>{statuses.map(claim=><ClaimCard key={claim.id} claim={claim}/>)}</section><section className="sources-say"><p className="eyebrow">WHAT CREDIBLE SOURCES SAY</p><h2>Review the underlying material yourself.</h2><p>The following summaries are drawn from the retained evidence cards, with links and publication dates. Source quality reflects a configuration policy—not a claim that any source is universally trustworthy.</p><div className="source-grid">{Array.from(new Map((statuses.flatMap(c=>c.evidence)).map(e=>[e.source.url,e])).values()).map(e=><a href={e.source.url} target="_blank" rel="noreferrer" key={e.id}><span>{e.source.quality_class} policy class</span><strong>{e.source.name}</strong><small>{fmtDate(e.published_at)} · {e.source.source_type}</small></a>)}</div></section>{report.provider_runs?.length? <section className="provider-section"><p className="eyebrow">RETRIEVAL RECORD</p>{report.provider_runs.map((p,i)=><div key={i}><b>{p.provider}</b><span className={p.status==='success'?'ok':'warn'}>{p.status}</span><p>{p.message}</p></div>)}</section>:null}<footer className="report-footer"><Brand compact/><p>VeriFact — Verify. Understand. Trust. This report is an evidence assessment, not a declaration of absolute truth.</p></footer></main>}
+function Report({id,publicView=false}:{id:string;publicView?:boolean}){
+  const[report,setReport]=useState<Verification|null>(null)
+  const[error,setError]=useState('')
+  const[loading,setLoading]=useState(true)
+  const[shareBusy,setShareBusy]=useState(false)
+  const[shareMessage,setShareMessage]=useState('')
+  useEffect(()=>{
+    api<Verification>(publicView?`/api/v1/reports/${id}`:`/api/v1/verifications/${id}`)
+      .then(setReport).catch(e=>setError(e.message)).finally(()=>setLoading(false))
+  },[id,publicView])
+  async function toggleShare(){
+    if(!report)return
+    setShareBusy(true)
+    try{
+      const r=await api<{is_public:boolean;public_id:string;url?:string}>(`/api/v1/verifications/${report.id}/share`,{method:'POST',body:JSON.stringify({is_public:!report.is_public})})
+      setReport({...report,is_public:r.is_public,public_id:r.public_id})
+      if(r.url){
+        try{await navigator.clipboard?.writeText(r.url);setShareMessage(r.is_public?'Public link copied to clipboard.':'Report is private.')}
+        catch{setShareMessage(r.is_public?'Public link enabled.':'Report is private.')}
+      }else setShareMessage(r.is_public?'Public link enabled.':'Report is private.')
+    }catch(e){setError((e as Error).message)}finally{setShareBusy(false)}
+  }
+  if(loading)return <div className="page-loading">Preparing the VeriFact report…</div>
+  if(error)return <PageShell className="report-page"><Notice kind="error">{error}</Notice></PageShell>
+  if(!report)return null
+  const statuses=report.claims||[]
+  const actions=!publicView&&<div className="report-actions"><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}</div>
+  const description=<>Submitted as {report.input_type}. {report.mode==='local-fixture'&&<span className="fixture-badge">Local demonstration mode</span>}</>
+  return <PageShell className={publicView?'public-report':'report-page'} beforeHeader={publicView&&<header className="public-top"><Brand/><span>Evidence-based verification report</span></header>} eyebrow="VERIFACT REPORT" title={report.article?.title||short(report.original_input,120)} description={description} actions={actions}>
+    <ScoreCard report={report}/>
+    <section className="report-summary"><div><p className="eyebrow">VERIFICATION SUMMARY</p><h2>{statuses.length} claim{statuses.length===1?'':'s'} assessed</h2></div><p>{report.summary}</p>{report.score_details&&<details className="score-method"><summary>How score eligibility and scoring were determined</summary><p>{report.score_details.eligibility_reason}</p>{report.score_details.eligible&&<div className="components">{Object.entries(report.score_details.components).map(([k,v])=><div key={k}><span>{k.replaceAll('_',' ')}</span><b>{v}</b></div>)}</div>}<p>Formula version {report.score_details.formula_version}. Scores are conditional on retrieved evidence and VeriFact policy; they do not establish absolute truth.</p></details>}</section>
+    {report.article&&<section className="article-context"><p className="eyebrow">ARTICLE CONTEXT</p><div><span>Publisher <b>{report.article.publisher||'Not available'}</b></span><span>Published <b>{fmtDate(report.article.published_at)}</b></span><span>Extraction <b>{report.article.extraction_status}</b></span></div></section>}
+    <section className="claims-section"><div className="section-heading"><div><p className="eyebrow">CLAIM-BY-CLAIM ANALYSIS</p><h2>What the retained evidence supports</h2></div><p>VeriFact’s assessments are limited to the dated records shown below.</p></div>{statuses.map(claim=><ClaimCard key={claim.id} claim={claim}/>)}</section>
+    <section className="sources-say"><p className="eyebrow">WHAT CREDIBLE SOURCES SAY</p><h2>Review the underlying material yourself.</h2><p>The following summaries are drawn from the retained evidence cards, with links and publication dates. Source quality reflects a configuration policy—not a claim that any source is universally trustworthy.</p><div className="source-grid">{Array.from(new Map((statuses.flatMap(c=>c.evidence)).map(e=>[e.source.url,e])).values()).map(e=><a href={e.source.url} target="_blank" rel="noreferrer" key={e.id}><span>{e.source.quality_class} policy class</span><strong>{e.source.name}</strong><small>{fmtDate(e.published_at)} · {e.source.source_type}</small></a>)}</div></section>
+    {report.provider_runs?.length?<section className="provider-section"><p className="eyebrow">RETRIEVAL RECORD</p>{report.provider_runs.map((providerRun,i)=><div key={i}><b>{providerRun.provider}</b><span className={providerRun.status==='success'?'ok':'warn'}>{providerRun.status}</span><p>{providerRun.message}</p></div>)}</section>:null}
+    <footer className="report-footer"><Brand compact/><p>VeriFact — Verify. Understand. Trust. This report is an evidence assessment, not a declaration of absolute truth.</p></footer>
+  </PageShell>
+}
 function Verify({go}:{go:(r:string)=>void}){
-  const[type,setType]=useState<'text'|'url'>('text');
-  const[content,setContent]=useState('');
-  const[error,setError]=useState('');
-  const[busy,setBusy]=useState(false);
-  const[stage,setStage]=useState('');
+  const[type,setType]=useState<'text'|'url'>('text')
+  const[content,setContent]=useState('')
+  const[error,setError]=useState('')
+  const[busy,setBusy]=useState(false)
+  const[stage,setStage]=useState('')
   async function waitForReport(id:string){
     for(let attempt=0;attempt<120;attempt+=1){
-      const report=await api<Verification>(`/api/v1/verifications/${id}`);
-      setStage(`${report.stage}…`);
-      if(report.status==='completed')return report;
-      if(report.status==='failed')throw new Error(report.error_message||'VeriFact could not complete this verification.');
-      await new Promise(resolve=>setTimeout(resolve,1500));
+      const report=await api<Verification>(`/api/v1/verifications/${id}`)
+      setStage(`${report.stage}…`)
+      if(report.status==='completed')return report
+      if(report.status==='failed')throw new Error(report.error_message||'VeriFact could not complete this verification.')
+      await new Promise(resolve=>setTimeout(resolve,1500))
     }
-    throw new Error('VeriFact is still processing this verification. Open My reports to check progress.');
+    throw new Error('VeriFact is still processing this verification. Open My reports to check progress.')
   }
   async function submit(e:FormEvent){
-    e.preventDefault();setBusy(true);setError('');setStage('Submitting to VeriFact…');
+    e.preventDefault();setBusy(true);setError('');setStage('Submitting to VeriFact…')
     try{
-      const created=await api<{id:string;mode:string;stage:string}>('/api/v1/verifications',{method:'POST',body:JSON.stringify({input_type:type,content})},VERIFY_SUBMISSION_TIMEOUT_MS);
+      const created=await api<{id:string;mode:string;stage:string}>('/api/v1/verifications',{method:'POST',body:JSON.stringify({input_type:type,content})},VERIFY_SUBMISSION_TIMEOUT_MS)
       if(created.mode==='local-fixture'){
-        setStage('Processing deterministic local evidence…');
-        const report=await api<Verification>(`/api/v1/verifications/${created.id}/run-fixture`,{method:'POST'},VERIFY_SUBMISSION_TIMEOUT_MS);
-        go('/report/'+report.id);
+        setStage('Processing deterministic local evidence…')
+        const report=await api<Verification>(`/api/v1/verifications/${created.id}/run-fixture`,{method:'POST'},VERIFY_SUBMISSION_TIMEOUT_MS)
+        go('/report/'+report.id)
       }else{
-        setStage('Queued for retained-evidence processing…');
-        const report=await waitForReport(created.id);
-        go('/report/'+report.id);
+        setStage('Queued for retained-evidence processing…')
+        const report=await waitForReport(created.id)
+        go('/report/'+report.id)
       }
-    }catch(err){setError((err as Error).message);setStage('');}
-    finally{setBusy(false);}
+    }catch(err){setError((err as Error).message);setStage('')}
+    finally{setBusy(false)}
   }
-  const statusMessage=error?<Notice kind="error">{error}</Notice>:stage?<Notice>{stage}</Notice>:null;
-  return <main className="app-page verify-page">
-    <div className="verify-intro"><p className="eyebrow">NEW VERIFICATION</p><h1>Start with the claim. Then inspect the evidence.</h1><p>VeriFact looks for reviewable evidence, applies a fixed source policy, and leaves weakly supported submissions scoreless.</p></div>
+  const statusMessage=error?<Notice kind="error">{error}</Notice>:stage?<Notice>{stage}</Notice>:null
+  return <PageShell className="verify-page" eyebrow="NEW VERIFICATION" title="Start with the claim. Then inspect the evidence." description="VeriFact looks for reviewable evidence, applies a fixed source policy, and leaves weakly supported submissions scoreless.">
     <form className="verification-form" onSubmit={submit}>
       <div className="type-tabs" role="tablist" aria-label="Verification input type">
         <button role="tab" aria-selected={type==='text'} className={type==='text'?'selected':''} type="button" onClick={()=>setType('text')}>Paste text</button>
         <button role="tab" aria-selected={type==='url'} className={type==='url'?'selected':''} type="button" onClick={()=>setType('url')}>Article URL</button>
       </div>
-      <label>{type==='url'?'Public article URL':'Article or news text'}
-        <textarea value={content} onChange={e=>setContent(e.target.value)} placeholder={type==='url'?'https://example.org/article':'Paste the article or news text you want to verify…'} required/>
-      </label>
+      <label>{type==='url'?'Public article URL':'Article or news text'}<textarea value={content} onChange={e=>setContent(e.target.value)} placeholder={type==='url'?'https://example.org/article':'Paste the article or news text you want to verify…'} required/></label>
       {statusMessage&&<div key={`${error?'error':'stage'}:${error||stage}`} className="verification-status-message" aria-live="polite">{statusMessage}</div>}
       <Button disabled={busy}>{busy?'Verifying evidence…':'Verify with evidence'}</Button>
       <p className="form-note">VeriFact does not use an AI answer alone. If evidence is insufficient, the report will show no overall score.</p>
     </form>
-  </main>;
+  </PageShell>
 }
-function Dashboard({user,go}:{user:User;go:(r:string)=>void}){const[items,setItems]=useState<Verification[]>([]);const[stats,setStats]=useState<Stats|null>(null);const[error,setError]=useState('');const[loading,setLoading]=useState(true);useEffect(()=>{api<{items:Verification[];stats:Stats}>('/api/v1/verifications').then(r=>{setItems(r.items);setStats(r.stats)}).catch(e=>setError(e.message)).finally(()=>setLoading(false))},[]);return <main className="app-page dashboard"><section className="dashboard-hero"><div><p className="eyebrow">YOUR VERIFICATION WORKSPACE</p><h1>Welcome back, {user.full_name.split(' ')[0]}.</h1><p>Trace claims to evidence, understand the limits of what was found, and share only the reports you choose.</p></div><Button onClick={()=>go('/verify')}>Verify news or a claim <span>→</span></Button></section>{error&&<Notice kind="error">{error}</Notice>}{loading&&<div className="loading-state" role="status">Loading your reports…</div>}<section className="stat-grid"><div><span>Completed reports</span><b>{stats?.total??'—'}</b><small>Stored privately by default</small></div><div><span>Evidence-backed average</span><b>{stats?.average_score??'—'}{stats?.average_score!==null&&stats?.average_score!==undefined?'/100':''}</b><small>Eligible scored reports only</small></div><div><span>Scoreless evidence gaps</span><b>{stats?.insufficient_evidence_reports??'—'}</b><small>Not converted into arbitrary scores</small></div><div><span>Policy version</span><b>1.0</b><small>Source classification is configurable</small></div></section><section className="recent-section"><div className="section-heading"><div><p className="eyebrow">RECENT REPORTS</p><h2>Evidence assessments</h2></div><button className="link-button" onClick={()=>go('/history')}>View all reports</button></div>{loading?null:items.length?<div className="recent-list">{items.slice(0,5).map(item=><button key={item.id} className="recent-row" onClick={()=>go('/report/'+item.id)}><div><span className={`status-dot ${item.score!==null?'scored':''}`}></span><strong>{short(item.original_input,85)}</strong><small>{fmtDate(item.completed_at||item.created_at)} · {item.evidence_status||item.status}</small></div><div>{item.score!==null?<><b>{item.score}/100</b><span>{item.score_band}</span></>:<><b>—</b><span>Scoreless</span></>}<i>→</i></div></button>)}</div>:<div className="empty-state"><Mark/><h3>No reports yet</h3><p>Your first VeriFact report will keep claims, evidence, and policy context in one place.</p><Button onClick={()=>go('/verify')}>Start a verification</Button></div>}</section></main>}
+function Dashboard({user,go}:{user:User;go:(r:string)=>void}){
+  const[items,setItems]=useState<Verification[]>([])
+  const[stats,setStats]=useState<Stats|null>(null)
+  const[error,setError]=useState('')
+  const[loading,setLoading]=useState(true)
+  useEffect(()=>{api<{items:Verification[];stats:Stats}>('/api/v1/verifications').then(r=>{setItems(r.items);setStats(r.stats)}).catch(e=>setError(e.message)).finally(()=>setLoading(false))},[])
+  return <PageShell className="dashboard" eyebrow="YOUR VERIFICATION WORKSPACE" title={`Welcome back, ${user.full_name.split(' ')[0]}.`} description="Trace claims to evidence, understand the limits of what was found, and share only the reports you choose." actions={<Button onClick={()=>go('/verify')}>Verify news or a claim <span>→</span></Button>}>
+    {error&&<Notice kind="error">{error}</Notice>}
+    {loading&&<div className="loading-state" role="status">Loading your reports…</div>}
+    <section className="stat-grid"><div><span>Completed reports</span><b>{stats?.total??'—'}</b><small>Stored privately by default</small></div><div><span>Evidence-backed average</span><b>{stats?.average_score??'—'}{stats?.average_score!==null&&stats?.average_score!==undefined?'/100':''}</b><small>Eligible scored reports only</small></div><div><span>Scoreless evidence gaps</span><b>{stats?.insufficient_evidence_reports??'—'}</b><small>Not converted into arbitrary scores</small></div><div><span>Policy version</span><b>1.0</b><small>Source classification is configurable</small></div></section>
+    <section className="recent-section"><div className="section-heading"><div><p className="eyebrow">RECENT REPORTS</p><h2>Evidence assessments</h2></div><button className="link-button" onClick={()=>go('/history')}>View all reports</button></div>{loading?null:items.length?<div className="recent-list">{items.slice(0,5).map(item=><button key={item.id} className="recent-row" onClick={()=>go('/report/'+item.id)}><div><span className={`status-dot ${item.score!==null?'scored':''}`}></span><strong>{short(item.original_input,85)}</strong><small>{fmtDate(item.completed_at||item.created_at)} · {item.evidence_status||item.status}</small></div><div>{item.score!==null?<><b>{item.score}/100</b><span>{item.score_band}</span></>:<><b>—</b><span>Scoreless</span></>}<i>→</i></div></button>)}</div>:<div className="empty-state"><Mark/><h3>No reports yet</h3><p>Your first VeriFact report will keep claims, evidence, and policy context in one place.</p><Button onClick={()=>go('/verify')}>Start a verification</Button></div>}</section>
+  </PageShell>
+}
 function History({go}:{go:(r:string)=>void}){
   const[items,setItems]=useState<Verification[]>([])
   const[q,setQ]=useState('')
@@ -146,7 +195,13 @@ function History({go}:{go:(r:string)=>void}){
       setSuccess(`Report “${title}” was deleted successfully.`)
     }catch(e){setError((e as Error).message)}finally{setDeleting(null)}
   }
-  return <main className="app-page history-page"><div className="page-title"><p className="eyebrow">MY REPORTS</p><h1>Verification history</h1><p>Stored evidence and report visibility remain under your control.</p></div><div className="history-tools"><input aria-label="Search reports" placeholder="Search a claim or article" value={q} onChange={e=>setQ(e.target.value)}/><select value={filter} onChange={e=>{setFilter(e.target.value);setTimeout(load,0)}}><option value="">All evidence statuses</option><option>Scored — evidence coverage sufficient</option><option>Insufficient evidence — no overall score</option></select><Button onClick={load}>Filter</Button><Button className="secondary" onClick={()=>go('/verify')}>New verification</Button></div>{error&&<Notice kind="error">{error}</Notice>}{success&&<Notice kind="success">{success}</Notice>}{loading&&<div className="loading-state" role="status">Loading report history…</div>}<div className="history-table"><div className="table-head"><span>Submission</span><span>Evidence status</span><span>Verified</span><span>Score</span><span></span></div>{items.map(item=><div className="table-row" key={item.id}><button onClick={()=>go('/report/'+item.id)}><strong>{short(item.original_input,92)}</strong><small>{item.input_type} input</small></button><span className={`status-pill ${item.score!==null?'status-supported':'status-insufficient'}`}>{item.evidence_status||item.status}</span><span>{fmtDate(item.completed_at||item.created_at)}</span><span>{item.score!==null?`${item.score}/100`:'No score'}</span><button className="trash" onClick={()=>remove(item)} disabled={deleting===item.id} aria-label={`Delete report: ${short(item.original_input,100)}`} title="Delete report"><svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg></button></div>)}</div>{!loading&&!items.length&&<div className="empty-state"><h3>No matching reports</h3><p>Try a different search or begin a new evidence check.</p></div>}</main>
+  return <PageShell className="history-page" eyebrow="MY REPORTS" title="Verification history" description="Stored evidence and report visibility remain under your control." actions={<Button className="secondary" onClick={()=>go('/verify')}>New verification</Button>}>
+    <div className="history-tools"><input aria-label="Search reports" placeholder="Search a claim or article" value={q} onChange={e=>setQ(e.target.value)}/><select value={filter} onChange={e=>{setFilter(e.target.value);setTimeout(load,0)}}><option value="">All evidence statuses</option><option>Scored — evidence coverage sufficient</option><option>Insufficient evidence — no overall score</option></select><Button onClick={load}>Filter</Button></div>
+    {error&&<Notice kind="error">{error}</Notice>}{success&&<Notice kind="success">{success}</Notice>}
+    {loading&&<div className="loading-state" role="status">Loading report history…</div>}
+    <div className="history-table"><div className="table-head"><span>Submission</span><span>Evidence status</span><span>Verified</span><span>Score</span><span></span></div>{items.map(item=><div className="table-row" key={item.id}><button onClick={()=>go('/report/'+item.id)}><strong>{short(item.original_input,92)}</strong><small>{item.input_type} input</small></button><span className={`status-pill ${item.score!==null?'status-supported':'status-insufficient'}`}>{item.evidence_status||item.status}</span><span>{fmtDate(item.completed_at||item.created_at)}</span><span>{item.score!==null?`${item.score}/100`:'No score'}</span><button className="trash" onClick={()=>remove(item)} disabled={deleting===item.id} aria-label={`Delete report: ${short(item.original_input,100)}`} title="Delete report"><svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg></button></div>)}</div>
+    {!loading&&!items.length&&<div className="empty-state"><h3>No matching reports</h3><p>Try a different search or begin a new evidence check.</p></div>}
+  </PageShell>
 }
 function App(){
   const[route,setRoute]=useState(location.pathname)
