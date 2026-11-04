@@ -62,6 +62,7 @@ class GoogleFactCheckProvider:
 # The lock and cache are process-local; keep this provider single-process or use
 # a shared limiter if deploying multiple backend workers/replicas.
 _GDELT_MIN_INTERVAL_SECONDS = 5.25
+_GDELT_REQUEST_TIMEOUT_SECONDS = 18
 _GDELT_CACHE_TTL_SECONDS = 300
 _gdelt_lock = Lock()
 _gdelt_last_request_at = 0.0
@@ -130,7 +131,7 @@ class GDELTProvider:
                 response = httpx.get(
                     'https://api.gdeltproject.org/api/v2/doc/doc',
                     params=params,
-                    timeout=10,
+                    timeout=_GDELT_REQUEST_TIMEOUT_SECONDS,
                     headers={'User-Agent': 'VeriFact/1.0 (evidence search)'},
                 )
                 if response.status_code != 429 or attempt == 1:

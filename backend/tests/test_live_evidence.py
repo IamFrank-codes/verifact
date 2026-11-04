@@ -206,13 +206,16 @@ def test_gdelt_retries_once_after_rate_limit(monkeypatch):
     success.json.return_value = {'articles': []}
     responses = iter([limited, success])
     calls = []
+    timeouts = []
     def fake_get(url, *, params, timeout, headers):
         calls.append(url)
+        timeouts.append(timeout)
         return next(responses)
     monkeypatch.setattr(providers.httpx, 'get', fake_get)
 
     assert providers.GDELTProvider().search('a rate limited claim') == []
     assert len(calls) == 2
+    assert timeouts == [18, 18]
     assert delays == [5.25]
 
 def test_provider_error_message_explains_rate_limit_without_leaking_request_url():
