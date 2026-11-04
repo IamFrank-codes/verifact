@@ -17,11 +17,13 @@ from slowapi.util import get_remote_address
 from app.core.config import get_settings
 from app.db import Base, engine, get_db
 from app.models import Claim, EmailVerificationToken, Evidence, PasswordResetToken, ProviderRun, User, Verification
-from app.schemas import ForgotPasswordInput, LoginInput, RegisterInput, ResendVerificationInput, ResetPasswordInput, ShareInput, VerificationInput, VerifyEmailInput
+from app.schemas import EmailPdfInput, ForgotPasswordInput, LoginInput, RegisterInput, ResendVerificationInput, ResetPasswordInput, ShareInput, VerificationInput, VerifyEmailInput
 from app.security import create_access_token, decode_access_token, hash_password, new_reset_token, token_hash, verify_password
-from app.services.email import send_email_verification_email, send_password_reset_email
+from app.services.email import send_email_verification_email, send_password_reset_email, send_verification_pdf_email
 from app.services.jobs import enqueue_verification, redis_ready
 from app.services.verification import run_verification
+from app.services.pdf_report import render_verification_pdf
+from fastapi.responses import Response as RawResponse
 
 logger = logging.getLogger('verifact')
 settings = get_settings()
@@ -321,6 +323,32 @@ def list_verifications(q: str | None = None, evidence_status: str | None = None,
 def get_verification(verification_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return verification_out(get_owned(db, user, verification_id))
 
+def _completed_report(db: Session, user: User, verification_id: str) -> Verification:
+    verification = get_owned(db, user, verification_id)
+    if verification.status != 'completed':
+        raise HTTPException(status_code=409, detail='This report is not complete yet.')
+    return verification
+
+@app.get('/api/v1/verifications/{verification_id}/pdf')
+def download_verification_pdf(verification_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    verification = _completed_report(db, user, verification_id)
+    pdf_bytes = render_verification_pdf(verification)
+    return RawResponse(content=pdf_bytes, media_type='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="verifact-report-{verification.id[:8]}.pdf"',
+        'Cache-Control': 'private, no-store',
+    })
+
+@app.post('/api/v1/verifications/{verification_id}/email-pdf')
+@limiter.limit('10/hour')
+def email_verification_pdf(verification_id: str, request: Request, payload: EmailPdfInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    verification = _completed_report(db, user, verification_id)
+    pdf_bytes = render_verification_pdf(verification)
+    try:
+        send_verification_pdf_email(str(payload.email), verification.id, pdf_bytes)
+    except Exception as exc:
+        logger.exception('Verification PDF email delivery failed', extra={'verification_id': verification.id, 'recipient': str(payload.email)})
+        raise HTTPException(status_code=503, detail='VeriFact could not send your report right now. Please try again later.') from exc
+    return {'message': 'Your VeriFact report has been sent to the email address provided.'}
 
 @app.get('/api/v1/verifications/{verification_id}/status')
 def verification_status(verification_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):

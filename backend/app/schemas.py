@@ -44,3 +44,6 @@ class VerificationInput(BaseModel):
 
 class ShareInput(BaseModel):
     is_public: bool
+
+class EmailPdfInput(BaseModel):
+    email: EmailStr

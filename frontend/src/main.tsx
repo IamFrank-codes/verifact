@@ -1,4 +1,4 @@
-import React, {FormEvent, useEffect, useMemo, useState} from 'react'
+import React, {FormEvent, useEffect, useMemo, useRef, useState} from 'react'
 import {createRoot} from 'react-dom/client'
 import './styles.css'
 
@@ -11,6 +11,8 @@ type Verification = {id:string; input_type:string; original_input:string; status
 type Stats = {total:number; average_score:number|null; scored_reports:number; insufficient_evidence_reports:number}
 
 const API_TIMEOUT_MS = 15_000
+const EMAIL_SEND_TIMEOUT_MS = 60_000
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 // Registration may synchronously attempt SMTP delivery (bounded to 20 seconds).
 const SIGNUP_TIMEOUT_MS = 45_000
 const VERIFY_SUBMISSION_TIMEOUT_MS = 120_000
@@ -52,15 +54,30 @@ function PageShell({children,className='',eyebrow,title,description,actions,befo
 function AuthShell({children}:{children:React.ReactNode}){return <main className="auth-page"><section className="auth-aside"><Brand/><div className="eyebrow">EVIDENCE-BASED VERIFICATION</div><h1>Verification deserves more than a confident answer.</h1><p>VeriFact keeps evidence, source policy, uncertainty, and scoring rules visible—so you can understand the basis of every result.</p></section><section className="auth-card"><div className="auth-content">{children}</div></section></main>}
 
 function Login({onLogin, go}:{onLogin:(u:User)=>void;go:(route:string)=>void}){
-  const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false)
+  const initialEmail=new URLSearchParams(location.search).get('email')||''; const [email,setEmail]=useState(initialEmail); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false)
   async function submit(e:FormEvent){e.preventDefault(); setBusy(true);setError('');try{const r=await api<{user:User}>('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email,password})});onLogin(r.user);go('/dashboard')}catch(err){setError((err as Error).message)}finally{setBusy(false)}}
   return <AuthShell><Brand compact/><div className="auth-heading"><p className="eyebrow">WELCOME BACK</p><h2>Sign in to VeriFact</h2><p>Continue to your evidence-verification workspace.</p></div><form onSubmit={submit} className="form-stack"><label>Email address<input value={email} onChange={e=>setEmail(e.target.value)} type="email" required autoComplete="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password" required autoComplete="current-password"/></label>{error&&<Notice kind="error">{error}</Notice>}<Button disabled={busy}>{busy?'Signing in…':'Sign in'}</Button></form><div className="auth-links"><button onClick={()=>go('/forgot')}>Forgot password?</button><span>New to VeriFact? <button onClick={()=>go('/signup')}>Create an account</button></span></div></AuthShell>
 }
 function Signup({onLogin,go}:{onLogin:(u:User)=>void;go:(r:string)=>void}){
-  const [form,setForm]=useState({full_name:'',email:'',password:'',confirm_password:''});const [error,setError]=useState('');const [busy,setBusy]=useState(false)
+  const [form,setForm]=useState({full_name:'',email:'',password:'',confirm_password:''})
+  const [error,setError]=useState('')
+  const [busy,setBusy]=useState(false)
+  const [accountExists,setAccountExists]=useState(false)
   const update=(field:keyof typeof form,value:string)=>setForm({...form,[field]:value})
-  async function submit(e:FormEvent){e.preventDefault();if(form.password!==form.confirm_password){setError('The passwords are not the same.');return}setBusy(true);setError('');try{let r:{user:User};try{r=await api<{user:User}>('/api/v1/auth/register',{method:'POST',body:JSON.stringify(form)},SIGNUP_TIMEOUT_MS)}catch(err){if((err as ApiError).status!==409)throw err;r=await api<{user:User}>('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email:form.email,password:form.password})})}onLogin(r.user);go('/dashboard')}catch(err){setError((err as Error).message)}finally{setBusy(false)}}
-  return <AuthShell><Brand compact/><div className="auth-heading"><p className="eyebrow">CREATE YOUR WORKSPACE</p><h2>Start verifying with evidence.</h2><p>VeriFact stores your reports privately unless you decide to share them.</p></div><form onSubmit={submit} className="form-stack"><label>Full name<input value={form.full_name} onChange={e=>update('full_name',e.target.value)} required autoComplete="name"/></label><label>Email address<input value={form.email} onChange={e=>update('email',e.target.value)} type="email" required autoComplete="email"/></label><label>Password<input value={form.password} onChange={e=>update('password',e.target.value)} type="password" required autoComplete="new-password"/><small>At least 10 characters with uppercase, lowercase, and a number.</small></label><label>Confirm password<input value={form.confirm_password} onChange={e=>update('confirm_password',e.target.value)} type="password" required autoComplete="new-password"/></label>{error&&<Notice kind="error">{error}</Notice>}<Button disabled={busy}>{busy?'Creating workspace…':'Create VeriFact account'}</Button></form><div className="auth-links"><span>Already have an account? <button onClick={()=>go('/login')}>Sign in</button></span></div></AuthShell>
+  const loginPath=()=>form.email.trim()?`/login?email=${encodeURIComponent(form.email.trim())}`:'/login'
+  async function submit(e:FormEvent){
+    e.preventDefault()
+    if(form.password!==form.confirm_password){setError('The passwords are not the same.');return}
+    setBusy(true);setError('')
+    try{
+      const r=await api<{user:User}>('/api/v1/auth/register',{method:'POST',body:JSON.stringify(form)},SIGNUP_TIMEOUT_MS)
+      onLogin(r.user);go('/dashboard')
+    }catch(err){
+      if((err as ApiError).status===409){setAccountExists(true);return}
+      setError((err as Error).message)
+    }finally{setBusy(false)}
+  }
+  return <AuthShell><Brand compact/><div className="auth-heading"><p className="eyebrow">{accountExists?'ACCOUNT ALREADY EXISTS':'CREATE YOUR WORKSPACE'}</p><h2>{accountExists?'This email is already registered.':'Start verifying with evidence.'}</h2><p>{accountExists?'No account details were changed. Sign in to continue.':'VeriFact stores your reports privately unless you decide to share them.'}</p></div>{accountExists?<div className="account-exists-view"><Notice>An account already exists with <strong>{form.email.trim()}</strong>. We did not change any account details.</Notice><Button type="button" onClick={()=>go(loginPath())}>Go to sign in</Button></div>:<><form onSubmit={submit} className="form-stack"><label>Full name<input value={form.full_name} onChange={e=>update('full_name',e.target.value)} required autoComplete="name"/></label><label>Email address<input value={form.email} onChange={e=>update('email',e.target.value)} type="email" required autoComplete="email"/></label><label>Password<input value={form.password} onChange={e=>update('password',e.target.value)} type="password" required autoComplete="new-password"/><small>At least 10 characters with uppercase, lowercase, and a number.</small></label><label>Confirm password<input value={form.confirm_password} onChange={e=>update('confirm_password',e.target.value)} type="password" required autoComplete="new-password"/></label>{error&&<Notice kind="error">{error}</Notice>}<Button disabled={busy}>{busy?'Creating workspace…':'Create VeriFact account'}</Button></form><div className="auth-links"><span>Already have an account? <button type="button" onClick={()=>go(loginPath())}>Sign in</button></span></div></>}</AuthShell>
 }
 function Forgot({go}:{go:(r:string)=>void}){
   const[email,setEmail]=useState('');const[msg,setMsg]=useState('');const[token,setToken]=useState('');const[error,setError]=useState('');const[busy,setBusy]=useState(false)
@@ -84,10 +101,37 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
   const[loading,setLoading]=useState(true)
   const[shareBusy,setShareBusy]=useState(false)
   const[shareMessage,setShareMessage]=useState('')
+  const[pdfPreparing,setPdfPreparing]=useState(false)
+  const[preparedPdf,setPreparedPdf]=useState<Blob|null>(null)
+  const[preparedPdfUrl,setPreparedPdfUrl]=useState('')
+  const[pdfFileName,setPdfFileName]=useState('')
+  const[emailDialogOpen,setEmailDialogOpen]=useState(false)
+  const[emailInput,setEmailInput]=useState('')
+  const[emailInputValid,setEmailInputValid]=useState(false)
+  const[emailSendBusy,setEmailSendBusy]=useState(false)
+  const[emailError,setEmailError]=useState('')
+  const emailInputRef=useRef<HTMLInputElement>(null)
   useEffect(()=>{
     api<Verification>(publicView?`/api/v1/reports/${id}`:`/api/v1/verifications/${id}`)
       .then(setReport).catch(e=>setError(e.message)).finally(()=>setLoading(false))
   },[id,publicView])
+  useEffect(()=>{
+    if(!preparedPdf){setPreparedPdfUrl('');return}
+    const url=URL.createObjectURL(preparedPdf)
+    setPreparedPdfUrl(url)
+    return()=>URL.revokeObjectURL(url)
+  },[preparedPdf])
+  useEffect(()=>{if(emailDialogOpen)emailInputRef.current?.focus()},[emailDialogOpen])
+  function closeEmailDialog(){
+    if(emailSendBusy)return
+    setEmailDialogOpen(false);setPreparedPdf(null);setEmailInput('');setEmailInputValid(false);setEmailError('')
+  }
+  useEffect(()=>{
+    if(!emailDialogOpen)return
+    const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!emailSendBusy)closeEmailDialog()}
+    window.addEventListener('keydown',onKeyDown)
+    return()=>window.removeEventListener('keydown',onKeyDown)
+  },[emailDialogOpen,emailSendBusy])
   async function toggleShare(){
     if(!report)return
     setShareBusy(true)
@@ -100,11 +144,39 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
       }else setShareMessage(r.is_public?'Public link enabled.':'Report is private.')
     }catch(e){setError((e as Error).message)}finally{setShareBusy(false)}
   }
+  async function prepareEmailPdf(){
+    if(!report||pdfPreparing)return
+    setPdfPreparing(true);setEmailError('');setShareMessage('')
+    try{
+      const response=await fetch(`/api/v1/verifications/${report.id}/pdf`,{credentials:'include',headers:{Accept:'application/pdf'}})
+      if(!response.ok){
+        const body=await response.json().catch(()=>({})) as {detail?:string}
+        throw new Error(body.detail||'VeriFact could not prepare the report PDF.')
+      }
+      const pdf=await response.blob()
+      if(!pdf.type.toLowerCase().startsWith('application/pdf')||! (await pdf.slice(0,5).text()).startsWith('%PDF-'))throw new Error('VeriFact could not prepare a valid PDF for this report.')
+      setPreparedPdf(pdf)
+      setPdfFileName(`verifact-report-${report.id.slice(0,8)}.pdf`)
+      setEmailInput('');setEmailInputValid(false);setEmailDialogOpen(true)
+    }catch(err){setEmailError((err as Error).message)}
+    finally{setPdfPreparing(false)}
+  }
+  async function sendPdfEmail(event:FormEvent<HTMLFormElement>){
+    event.preventDefault()
+    if(!report||!emailInputValid||!EMAIL_FORMAT.test(emailInput.trim())||emailSendBusy)return
+    setEmailSendBusy(true);setEmailError('')
+    try{
+      const result=await api<{message:string}>(`/api/v1/verifications/${report.id}/email-pdf`,{method:'POST',body:JSON.stringify({email:emailInput.trim()})},EMAIL_SEND_TIMEOUT_MS)
+      setShareMessage(result.message||`PDF report sent to ${emailInput.trim()}.`)
+      setEmailDialogOpen(false);setPreparedPdf(null);setEmailInput('');setEmailInputValid(false)
+    }catch(err){setEmailError((err as Error).message)}
+    finally{setEmailSendBusy(false)}
+  }
   if(loading)return <div className="page-loading">Preparing the VeriFact report…</div>
   if(error)return <PageShell className="report-page"><Notice kind="error">{error}</Notice></PageShell>
   if(!report)return null
   const statuses=report.claims||[]
-  const actions=!publicView&&<div className="report-actions"><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}</div>
+  const actions=!publicView&&<div className="report-actions"><Button disabled={pdfPreparing} onClick={prepareEmailPdf}>{pdfPreparing?'Preparing PDF…':'Email report PDF'}</Button><Button className="secondary" disabled={shareBusy} onClick={toggleShare}>{shareBusy?'Updating…':report.is_public?'Make private':'Share public report'}</Button>{shareMessage&&<span className="share-state" role="status">{shareMessage}</span>}{emailError&&!emailDialogOpen&&<span className="share-error" role="alert">{emailError}</span>}</div>
   const description=<>Submitted as {report.input_type}. {report.mode==='local-fixture'&&<span className="fixture-badge">Local demonstration mode</span>}</>
   return <PageShell className={publicView?'public-report':'report-page'} beforeHeader={publicView&&<header className="public-top"><Brand/><span>Evidence-based verification report</span></header>} eyebrow="VERIFACT REPORT" title={report.article?.title||short(report.original_input,120)} description={description} actions={actions}>
     <ScoreCard report={report}/>
@@ -114,6 +186,7 @@ function Report({id,publicView=false}:{id:string;publicView?:boolean}){
     <section className="sources-say"><p className="eyebrow">WHAT CREDIBLE SOURCES SAY</p><h2>Review the underlying material yourself.</h2><p>The following summaries are drawn from the retained evidence cards, with links and publication dates. Source quality reflects a configuration policy—not a claim that any source is universally trustworthy.</p><div className="source-grid">{Array.from(new Map((statuses.flatMap(c=>c.evidence)).map(e=>[e.source.url,e])).values()).map(e=><a href={e.source.url} target="_blank" rel="noreferrer" key={e.id}><span>{e.source.quality_class} policy class</span><strong>{e.source.name}</strong><small>{fmtDate(e.published_at)} · {e.source.source_type}</small></a>)}</div></section>
     {report.provider_runs?.length?<section className="provider-section"><p className="eyebrow">RETRIEVAL RECORD</p>{report.provider_runs.map((providerRun,i)=><div key={i}><b>{providerRun.provider}</b><span className={providerRun.status==='success'?'ok':'warn'}>{providerRun.status}</span><p>{providerRun.message}</p></div>)}</section>:null}
     <footer className="report-footer"><Brand compact/><p>VeriFact — Verify. Understand. Trust. This report is an evidence assessment, not a declaration of absolute truth.</p></footer>
+    {emailDialogOpen&&!publicView&&<div className="email-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)closeEmailDialog()}}><section className="email-dialog" role="dialog" aria-modal="true" aria-labelledby="email-dialog-title" aria-describedby="email-dialog-description"><header className="email-dialog-header"><div><p className="eyebrow">SHARE REPORT</p><h2 id="email-dialog-title">Email the PDF report</h2><p id="email-dialog-description">The PDF has been prepared and will be attached to your email.</p></div><button type="button" className="email-dialog-close" aria-label="Close email dialog" onClick={closeEmailDialog} disabled={emailSendBusy}>×</button></header><div className="pdf-ready-card"><div><strong>PDF ready</strong><span>{pdfFileName}</span></div>{preparedPdfUrl&&<a href={preparedPdfUrl} download={pdfFileName}>Download a copy</a>}</div><form className="email-dialog-form" onSubmit={sendPdfEmail} aria-busy={emailSendBusy}><label htmlFor="report-recipient-email">Recipient email address</label><input ref={emailInputRef} id="report-recipient-email" type="email" autoComplete="email" required value={emailInput} aria-invalid={emailInput.length>0&&!emailInputValid} onChange={event=>{const value=event.currentTarget.value;setEmailInput(value);setEmailInputValid(event.currentTarget.validity.valid&&EMAIL_FORMAT.test(value.trim()))}} placeholder="name@example.com" disabled={emailSendBusy}/>{emailInput.length>0&&!emailInputValid&&<p className="email-validation invalid" role="status">Enter a valid email address to enable sending.</p>}{emailInputValid&&<p className="email-validation valid" role="status">Email address looks valid.</p>}{emailError&&<Notice kind="error">{emailError}</Notice>}<div className="email-dialog-actions"><Button disabled={!emailInputValid||emailSendBusy}>{emailSendBusy?'Sending PDF…':'Send PDF'}</Button><Button type="button" className="secondary" onClick={closeEmailDialog} disabled={emailSendBusy}>Cancel</Button></div></form></section></div>}
   </PageShell>
 }
 function Verify({go}:{go:(r:string)=>void}){

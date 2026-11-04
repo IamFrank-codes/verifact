@@ -39,6 +39,23 @@ def test_signup_auto_login_survives_verification_email_failure(monkeypatch):
     assert client.get('/api/v1/auth/me').json()['user']['email'] == 'signup-auto-login@example.com'
     monkeypatch.setattr(main_module.settings, 'mode', 'local-fixture')
 
+def test_duplicate_signup_does_not_change_existing_account():
+    email = 'existing-account@example.com'
+    auth_client(email)
+    response = client.post('/api/v1/auth/register', json={
+        'full_name': 'Changed Existing Name',
+        'email': email,
+        'password': 'DifferentPass2026',
+        'confirm_password': 'DifferentPass2026',
+    })
+    assert response.status_code == 409
+    assert response.json()['detail'] == 'An account with this email already exists.'
+    current = client.get('/api/v1/auth/me')
+    assert current.status_code == 200
+    assert current.json()['user']['full_name'] == 'VeriFact Tester'
+    assert current.json()['user']['email'] == email
+
+
 def test_scored_fixture_report():
     auth_client()
     created = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'COVID vaccines reduce hospitalization.'})
@@ -302,3 +319,49 @@ def test_url_without_headline_aligned_checkable_claim_is_not_scored(monkeypatch)
     assert report['claims'][0]['checkable'] is False
     assert report['claims'][0]['extraction_rationale'].startswith('The headline and article express opinion')
     assert not report['claims'][0]['evidence']
+
+
+def test_pdf_download_and_email_delivery(monkeypatch):
+    main_module.limiter._storage.reset()
+    auth_client('pdf-owner@example.com')
+    created = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A test claim with <script>alert(1)</script> & special text.'})
+    result = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
+    assert result.status_code == 200
+    report_id = result.json()['id']
+
+    response = client.get(f'/api/v1/verifications/{report_id}/pdf')
+    assert response.status_code == 200
+    assert response.content.startswith(b'%PDF')
+    assert response.headers['content-type'] == 'application/pdf'
+    assert f'verifact-report-{report_id[:8]}.pdf' in response.headers['content-disposition']
+    assert response.headers['cache-control'] == 'private, no-store'
+
+    delivered = []
+    monkeypatch.setattr(main_module, 'send_verification_pdf_email', lambda recipient, verification_id, content: delivered.append((recipient, verification_id, content)))
+    sent = client.post(f'/api/v1/verifications/{report_id}/email-pdf', json={'email': 'recipient@example.com'})
+    assert sent.status_code == 200
+    assert 'sent' in sent.json()['message'].lower()
+    assert delivered[0][0:2] == ('recipient@example.com', report_id)
+    assert delivered[0][2].startswith(b'%PDF')
+
+
+def test_email_pdf_rejects_invalid_recipient():
+    main_module.limiter._storage.reset()
+    auth_client('invalid-email-owner@example.com')
+    created = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A claim to validate email input.'})
+    report = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
+    response = client.post(f"/api/v1/verifications/{report.json()['id']}/email-pdf", json={'email': 'not-an-email'})
+    assert response.status_code == 422
+
+
+def test_pdf_routes_are_owner_only():
+    main_module.limiter._storage.reset()
+    auth_client('pdf-first-owner@example.com')
+    created = client.post('/api/v1/verifications', json={'input_type': 'claim', 'content': 'A private report.'})
+    report = client.post(f"/api/v1/verifications/{created.json()['id']}/run-fixture")
+    report_id = report.json()['id']
+
+    main_module.limiter._storage.reset()
+    auth_client('pdf-second-owner@example.com')
+    assert client.get(f'/api/v1/verifications/{report_id}/pdf').status_code == 404
+    assert client.post(f'/api/v1/verifications/{report_id}/email-pdf', json={'email': 'recipient@example.com'}).status_code == 404
